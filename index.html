@@ -321,8 +321,33 @@ button.valve-btn:hover { background: #e1bee7; }
     </div>
   </div>
 
-  <!-- ── Daily WHOOP quick-log ── -->
-  <div class="section-h" style="margin-top:20px;">WHOOP — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">log daily after waking</span></div>
+  <!-- ── Daily morning log ── -->
+  <div class="section-h" style="margin-top:20px;">Oura — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">log daily after waking</span></div>
+  <div class="card" style="padding:14px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div class="whoop-field">
+        <label>Sleep score <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
+        <input type="number" id="ouraScoreIn" placeholder="e.g. 82" min="0" max="100" style="width:100%">
+        <div class="hint">Oura → <b>Sleep</b> → score at top. Target ≥85.</div>
+      </div>
+      <div class="whoop-field">
+        <label>Efficiency % <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
+        <input type="number" id="ouraEffIn" placeholder="e.g. 88" min="0" max="100" style="width:100%">
+        <div class="hint">Oura → <b>Sleep</b> → "Efficiency". Target ≥85%.</div>
+      </div>
+      <div class="whoop-field">
+        <label>Latency (min)</label>
+        <input type="number" id="ouraLatIn" placeholder="e.g. 12" min="0" max="120" style="width:100%">
+        <div class="hint">Oura → <b>Sleep</b> → "Latency". Target &lt;20 min.</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="primary" onclick="saveOuraDaily()" style="flex:1;min-width:140px;">Save Oura data</button>
+      <span class="save-flash" id="saveFlashOura">✓ Saved</span>
+    </div>
+  </div>
+
+  <div class="section-h" style="margin-top:16px;">Whoop — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">sleep debt only</span></div>
   <div class="card" style="padding:14px;">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="whoop-field">
@@ -330,27 +355,14 @@ button.valve-btn:hover { background: #e1bee7; }
         <input type="number" id="gapIn" placeholder="e.g. 45" min="0" max="360" style="width:100%">
         <div class="hint">Whoop → <b>Sleep</b> → "Sleep Debt" at top. Target &lt;30 min.</div>
       </div>
-      <div class="whoop-field">
-        <label>Sleep latency (min)</label>
-        <input type="number" id="latIn" placeholder="e.g. 12" min="0" max="120" style="width:100%">
-        <div class="hint">Whoop → <b>Sleep</b> → "Latency". Target &lt;20 min.</div>
-      </div>
-      <div class="whoop-field">
-        <label>Recovery % <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
-        <input type="number" id="recovIn" placeholder="e.g. 72" min="0" max="100" style="width:100%">
-        <div class="hint">Whoop → <b>Recovery</b> → score circle. Target ≥67%.</div>
-      </div>
-      <div class="whoop-field">
-        <label>Sleep efficiency % <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
-        <input type="number" id="effDailyIn" placeholder="e.g. 88" min="0" max="100" style="width:100%">
-        <div class="hint">Whoop → <b>Sleep</b> → "Efficiency". Target ≥85%.</div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:2px;">
+        <div class="hint" style="color:#aaa;font-size:11px;line-height:1.5;">Used to detect emergency recovery mode and flag the ramp. HRV &amp; RHR are in Settings below.</div>
       </div>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button class="primary" onclick="saveWhoopDaily()" style="flex:1;min-width:140px;">Save WHOOP data</button>
+      <button class="primary" onclick="saveWhoopDaily()" style="flex:1;min-width:140px;">Save Whoop data</button>
       <span class="save-flash" id="saveFlashDaily">✓ Saved</span>
     </div>
-    <div class="hint" style="margin-top:8px;color:#aaa;">Skip if you don't have Whoop open — log anytime. HRV &amp; RHR are in Settings below.</div>
   </div>
 
   <div class="section-h">Weekly scorecard</div>
@@ -1064,17 +1076,17 @@ function renderScorecard() {
 
   const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
 
-  // Consistency: on-time nights / nights logged (yes or social = on time)
+  // Consistency: on-time nights out of full week (yes or social = on time)
   const onTime = entries.filter(e => e.status === 'yes' || e.status === 'social').length;
-  const consistPct = Math.round(onTime / 7 * 100); // out of full week
+  const consistPct = Math.round(onTime / 7 * 100);
 
-  // Efficiency: avg effDaily logged
-  const effAvg = avg(entries.map(e => e.effDaily).filter(n => typeof n === 'number'));
+  // Oura Sleep Score: avg ouraScore logged
+  const scoreAvg = avg(entries.map(e => e.ouraScore).filter(n => typeof n === 'number'));
 
-  // Recovery: avg recov logged
-  const recovAvg = avg(entries.map(e => e.recov).filter(n => typeof n === 'number'));
+  // Oura Efficiency: avg ouraEff logged
+  const effAvg = avg(entries.map(e => e.ouraEff).filter(n => typeof n === 'number'));
 
-  // Sleep Debt: avg gap logged
+  // Whoop Sleep Debt: avg gap logged (drives emergency mode)
   const debtAvg = avg(entries.map(e => e.gap).filter(n => typeof n === 'number'));
 
   function card(val, label, target, cls, fix, unit) {
@@ -1089,22 +1101,22 @@ function renderScorecard() {
 
   // Classify each metric
   const consistCls = consistPct >= 86 ? 'sc-ok' : consistPct >= 57 ? 'sc-warn' : 'sc-bad';
+  const scoreCls   = scoreAvg === null ? 'sc-empty' : scoreAvg >= 85 ? 'sc-ok' : scoreAvg >= 70 ? 'sc-warn' : 'sc-bad';
   const effCls     = effAvg === null ? 'sc-empty' : effAvg >= 85 ? 'sc-ok' : effAvg >= 75 ? 'sc-warn' : 'sc-bad';
-  const recovCls   = recovAvg === null ? 'sc-empty' : recovAvg >= 67 ? 'sc-ok' : recovAvg >= 34 ? 'sc-warn' : 'sc-bad';
   const debtCls    = debtAvg === null ? 'sc-empty' : debtAvg < 30 ? 'sc-ok' : debtAvg < 90 ? 'sc-warn' : 'sc-bad';
 
-  // Identify bottleneck (worst non-empty bad metric, priority order)
+  // Identify bottleneck — priority: debt > consistency > efficiency > score
   const bottlenecks = [];
-  if (debtCls === 'sc-bad') bottlenecks.push('Sleep debt is critical — prioritize getting more time in bed.');
+  if (debtCls === 'sc-bad') bottlenecks.push('Sleep debt is critical — prioritize more time in bed every night.');
   else if (debtCls === 'sc-warn') bottlenecks.push('Sleep debt elevated — protect the schedule.');
   if (consistCls === 'sc-bad') bottlenecks.push('Consistency is the core problem — hit the window every night.');
   else if (consistCls === 'sc-warn') bottlenecks.push('Consistency needs work — fewer exceptions this week.');
   if (effCls === 'sc-bad') bottlenecks.push('Low efficiency — you\'re lying awake too long. Check phone/light in bed.');
   else if (effCls === 'sc-warn') bottlenecks.push('Efficiency below target — wind-down routine may need tightening.');
-  if (recovCls === 'sc-bad') bottlenecks.push('Recovery low despite sleep — check stress, alcohol, or late eating.');
-  else if (recovCls === 'sc-warn') bottlenecks.push('Recovery is moderate — look for non-sleep stressors.');
+  if (scoreCls === 'sc-bad') bottlenecks.push('Sleep score low — check stress, alcohol, or late eating.');
+  else if (scoreCls === 'sc-warn') bottlenecks.push('Sleep score below target — look for non-schedule stressors.');
 
-  const allOk = consistCls === 'sc-ok' && (effCls === 'sc-ok' || effCls === 'sc-empty') && (recovCls === 'sc-ok' || recovCls === 'sc-empty') && (debtCls === 'sc-ok' || debtCls === 'sc-empty');
+  const allOk = consistCls === 'sc-ok' && (scoreCls === 'sc-ok' || scoreCls === 'sc-empty') && (effCls === 'sc-ok' || effCls === 'sc-empty') && (debtCls === 'sc-ok' || debtCls === 'sc-empty');
 
   let html = '';
   if (allOk) {
@@ -1114,9 +1126,9 @@ function renderScorecard() {
   }
   html += '<div class="scorecard">';
   html += card(consistPct, 'Consistency', 'target ≥6/7 nights', consistCls, 'Too many missed or social nights.', '%');
-  html += card(effAvg, 'Sleep efficiency', 'target ≥85%', effCls, 'Reduce time awake in bed.', '%');
-  html += card(recovAvg, 'Recovery', 'target ≥67%', recovCls, 'Non-sleep stressor likely.', '%');
-  html += card(debtAvg, 'Sleep debt', 'target <30 min', debtCls, 'Get more time in bed.', 'm');
+  html += card(scoreAvg, 'Sleep score', 'target ≥85 · Oura', scoreCls, 'Check stress, alcohol, late eating.', '');
+  html += card(effAvg, 'Efficiency', 'target ≥85% · Oura', effCls, 'Reduce time awake in bed.', '%');
+  html += card(debtAvg, 'Sleep debt', 'target <30 min · Whoop', debtCls, 'Get more time in bed.', 'm');
   html += '</div>';
   area.innerHTML = html;
 }
@@ -1134,18 +1146,18 @@ function renderStats() {
   const gapAvg=avg(entries.map(e=>e.gap).filter(n=>typeof n==='number'));
   const rhrAvg=avg(entries.map(e=>e.rhr).filter(n=>typeof n==='number'));
   const hrvAvg=avg(entries.map(e=>e.hrv).filter(n=>typeof n==='number'));
-  const latAvg=avg(entries.map(e=>e.lat).filter(n=>typeof n==='number'));
+  const latAvg=avg(entries.map(e=>e.ouraLat).filter(n=>typeof n==='number'));
   function sc(num,lbl,hint,cls=''){ return `<div class="stat${cls?' '+cls:''}"><div class="stat-num${lbl==='7-day rate'?' headline':''}">${num!==null?num:'—'}</div><div class="stat-lbl">${lbl}</div><div class="stat-hint">${hint}</div></div>`; }
   let html='<div class="stats">';
   html+=sc(rate+'%','7-day rate','target 80–90%',rate<70?'warn':rate>=90?'good':'');
   html+=sc(valves,'Valves 7d','leading indicator',valves>=3?'warn':'');
-  html+=sc(gapAvg!==null?gapAvg+'m':'—','Sleep debt 7d','target <30 min',gapAvg!==null&&gapAvg>=EMERGENCY_DEBT_MIN?'warn':gapAvg!==null&&gapAvg>=30?'warn':'');
-  html+=sc(rhrAvg!==null?rhrAvg:'—','Pre-bed RHR','target <55 bpm',rhrAvg!==null&&rhrAvg>=55?'warn':'');
+  html+=sc(gapAvg!==null?gapAvg+'m':'—','Sleep debt 7d','Whoop · target <30 min',gapAvg!==null&&gapAvg>=EMERGENCY_DEBT_MIN?'warn':gapAvg!==null&&gapAvg>=30?'warn':'');
+  html+=sc(rhrAvg!==null?rhrAvg:'—','Pre-bed RHR','Whoop · target <55 bpm',rhrAvg!==null&&rhrAvg>=55?'warn':'');
   html+='</div>';
   if(hrvAvg!==null||latAvg!==null){
     html+='<div class="stats" style="margin-top:0;">';
-    html+=sc(hrvAvg!==null?hrvAvg+'ms':'—','HRV 7d avg','higher = better');
-    html+=sc(latAvg!==null?latAvg+'m':'—','Sleep latency','target <20 min',latAvg!==null&&latAvg>=20?'warn':'');
+    html+=sc(hrvAvg!==null?hrvAvg+'ms':'—','HRV 7d avg','Whoop · higher = better');
+    html+=sc(latAvg!==null?latAvg+'m':'—','Sleep latency','Oura · target <20 min',latAvg!==null&&latAvg>=20?'warn':'');
     html+='<div class="stat"></div><div class="stat"></div></div>';
   }
   statsArea.innerHTML=html;
@@ -1178,7 +1190,7 @@ function renderAlert() {
   for(let i=1;i<=7;i++){const e=state.data[daysAgo(i)];if(e&&e.status==='no')consNo++;else break;}
   const g3=a=>a.filter(n=>typeof n==='number');
   const last3gaps=g3([1,2,3].map(i=>state.data[daysAgo(i)]?.gap));
-  const last3lats=g3([1,2,3].map(i=>state.data[daysAgo(i)]?.lat));
+  const last3lats=g3([1,2,3].map(i=>state.data[daysAgo(i)]?.ouraLat));
   const widening=last3gaps.length>=2&&last3gaps[0]>last3gaps[last3gaps.length-1]+20;
   const latHigh=last3lats.length>=2&&(last3lats.reduce((a,b)=>a+b,0)/last3lats.length)>30;
   const tz=deviceTz(),tzL=tzShortLabel(tz),mode=state.settings.mode;
@@ -1210,9 +1222,19 @@ function cycleDay(iso){ const cur=state.data[iso]&&state.data[iso].status;const 
 function logLastNight(status){ const iso=yesterday();state.data[iso]=state.data[iso]||{};state.data[iso].status=status;delete state.data[iso].auto;if(status==='no')showLeverPicker(iso);saveState(state);renderAll(); }
 function correctAutofill(status){ const y=yesterday();state.data[y]=state.data[y]||{};state.data[y].status=status;delete state.data[y].auto;if(status==='no')showLeverPicker(y);saveState(state);renderAll(); }
 function dismissAutofill(){ clearAutofillFlag(yesterday());renderAll(); }
+function saveOuraDaily(){
+  const iso=yesterday();
+  const fields=[['ouraScoreIn','ouraScore',0,100],['ouraEffIn','ouraEff',0,100],['ouraLatIn','ouraLat',0,120]];
+  let changed=false;
+  for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
+  if(!changed)return;
+  saveState(state);renderAll();
+  fields.forEach(([id])=>document.getElementById(id).value='');
+  const flash=document.getElementById('saveFlashOura');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
+}
 function saveWhoopDaily(){
   const iso=yesterday();
-  const fields=[['gapIn','gap',0,360],['latIn','lat',0,120],['recovIn','recov',0,100],['effDailyIn','effDaily',0,100]];
+  const fields=[['gapIn','gap',0,360]];
   let changed=false;
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
