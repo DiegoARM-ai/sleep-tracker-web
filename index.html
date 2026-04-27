@@ -266,7 +266,28 @@ button.valve-btn:hover { background: #e1bee7; }
   body { padding: 16px; }
   .whoop-grid { grid-template-columns: 1fr; }
   .emergency-banner .emg-stats { gap: 8px; }
+  .scorecard { grid-template-columns: 1fr 1fr; }
 }
+
+/* ── Weekly Scorecard ── */
+.scorecard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.sc-card { background: white; border: 1.5px solid #e8e6df; border-radius: 12px; padding: 14px 10px 10px; text-align: center; position: relative; }
+.sc-card.sc-ok { border-color: #a5d6a7; background: #f1faf2; }
+.sc-card.sc-warn { border-color: #ffb74d; background: #fffbf2; }
+.sc-card.sc-bad { border-color: #ef9a9a; background: #fff5f5; }
+.sc-card.sc-empty { border-color: #e8e6df; background: #fafaf7; }
+.sc-num { font-size: 24px; font-weight: 700; color: #1a1a1a; line-height: 1; }
+.sc-card.sc-ok .sc-num { color: #1b5e20; }
+.sc-card.sc-warn .sc-num { color: #e65100; }
+.sc-card.sc-bad .sc-num { color: #b71c1c; }
+.sc-card.sc-empty .sc-num { color: #bbb; }
+.sc-lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 5px; font-weight: 600; }
+.sc-target { font-size: 10px; color: #aaa; margin-top: 3px; font-style: italic; }
+.sc-fix { margin-top: 8px; padding: 5px 7px; background: rgba(0,0,0,0.04); border-radius: 6px; font-size: 10px; color: #555; line-height: 1.4; text-align: left; }
+.sc-card.sc-bad .sc-fix { background: #ffebee; color: #b71c1c; }
+.sc-card.sc-warn .sc-fix { background: #fff3e0; color: #bf360c; }
+.sc-bottleneck { font-size: 11px; font-weight: 600; color: #b71c1c; margin-bottom: 8px; padding: 7px 10px; background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; }
+.sc-ok-banner { font-size: 11px; color: #1b5e20; margin-bottom: 8px; padding: 7px 10px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -303,26 +324,39 @@ button.valve-btn:hover { background: #e1bee7; }
   <!-- ── Daily WHOOP quick-log ── -->
   <div class="section-h" style="margin-top:20px;">WHOOP — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">log daily after waking</span></div>
   <div class="card" style="padding:14px;">
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-      <div class="whoop-field" style="flex:1;min-width:120px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="whoop-field">
         <label>Sleep debt (min)</label>
         <input type="number" id="gapIn" placeholder="e.g. 45" min="0" max="360" style="width:100%">
-        <div class="hint">Whoop app → <b>Sleep</b> → "Sleep Debt" number at top. Target &lt;30 min.</div>
+        <div class="hint">Whoop → <b>Sleep</b> → "Sleep Debt" at top. Target &lt;30 min.</div>
       </div>
-      <div class="whoop-field" style="flex:1;min-width:120px;">
+      <div class="whoop-field">
         <label>Sleep latency (min)</label>
         <input type="number" id="latIn" placeholder="e.g. 12" min="0" max="120" style="width:100%">
-        <div class="hint">Whoop app → <b>Sleep</b> → "Latency". Target &lt;20 min.</div>
+        <div class="hint">Whoop → <b>Sleep</b> → "Latency". Target &lt;20 min.</div>
+      </div>
+      <div class="whoop-field">
+        <label>Recovery % <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
+        <input type="number" id="recovIn" placeholder="e.g. 72" min="0" max="100" style="width:100%">
+        <div class="hint">Whoop → <b>Recovery</b> → score circle. Target ≥67%.</div>
+      </div>
+      <div class="whoop-field">
+        <label>Sleep efficiency % <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
+        <input type="number" id="effDailyIn" placeholder="e.g. 88" min="0" max="100" style="width:100%">
+        <div class="hint">Whoop → <b>Sleep</b> → "Efficiency". Target ≥85%.</div>
       </div>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button class="primary" onclick="saveWhoopDaily()" style="flex:1;min-width:140px;">Save WHOOP data</button>
       <span class="save-flash" id="saveFlashDaily">✓ Saved</span>
     </div>
-    <div class="hint" style="margin-top:8px;color:#aaa;">Skip if you don't have Whoop open — you can log anytime. HRV &amp; RHR are in the weekly section below (Settings).</div>
+    <div class="hint" style="margin-top:8px;color:#aaa;">Skip if you don't have Whoop open — log anytime. HRV &amp; RHR are in Settings below.</div>
   </div>
 
-  <div class="section-h">Adherence</div>
+  <div class="section-h">Weekly scorecard</div>
+  <div id="scorecardArea"></div>
+
+  <div class="section-h">Adherence detail</div>
   <div id="statsArea"></div>
 
   <div class="section-h">Last 28 nights</div>
@@ -1021,6 +1055,72 @@ function renderTimeline() {
   }
 }
 
+// ── Render: weekly scorecard ──────────────────────────────────────────────────
+function renderScorecard() {
+  const area = document.getElementById('scorecardArea'); if (!area) return;
+  const days = []; for (let i = 1; i <= 7; i++) days.push(daysAgo(i));
+  const entries = days.map(d => state.data[d]).filter(Boolean);
+  if (entries.length === 0) { area.innerHTML = ''; return; }
+
+  const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+
+  // Consistency: on-time nights / nights logged (yes or social = on time)
+  const onTime = entries.filter(e => e.status === 'yes' || e.status === 'social').length;
+  const consistPct = Math.round(onTime / 7 * 100); // out of full week
+
+  // Efficiency: avg effDaily logged
+  const effAvg = avg(entries.map(e => e.effDaily).filter(n => typeof n === 'number'));
+
+  // Recovery: avg recov logged
+  const recovAvg = avg(entries.map(e => e.recov).filter(n => typeof n === 'number'));
+
+  // Sleep Debt: avg gap logged
+  const debtAvg = avg(entries.map(e => e.gap).filter(n => typeof n === 'number'));
+
+  function card(val, label, target, cls, fix, unit) {
+    const displayVal = val !== null ? val + (unit || '') : '—';
+    return `<div class="sc-card ${cls}">
+      <div class="sc-num">${displayVal}</div>
+      <div class="sc-lbl">${label}</div>
+      <div class="sc-target">${target}</div>
+      ${fix && cls !== 'sc-ok' && cls !== 'sc-empty' ? `<div class="sc-fix">${fix}</div>` : ''}
+    </div>`;
+  }
+
+  // Classify each metric
+  const consistCls = consistPct >= 86 ? 'sc-ok' : consistPct >= 57 ? 'sc-warn' : 'sc-bad';
+  const effCls     = effAvg === null ? 'sc-empty' : effAvg >= 85 ? 'sc-ok' : effAvg >= 75 ? 'sc-warn' : 'sc-bad';
+  const recovCls   = recovAvg === null ? 'sc-empty' : recovAvg >= 67 ? 'sc-ok' : recovAvg >= 34 ? 'sc-warn' : 'sc-bad';
+  const debtCls    = debtAvg === null ? 'sc-empty' : debtAvg < 30 ? 'sc-ok' : debtAvg < 90 ? 'sc-warn' : 'sc-bad';
+
+  // Identify bottleneck (worst non-empty bad metric, priority order)
+  const bottlenecks = [];
+  if (debtCls === 'sc-bad') bottlenecks.push('Sleep debt is critical — prioritize getting more time in bed.');
+  else if (debtCls === 'sc-warn') bottlenecks.push('Sleep debt elevated — protect the schedule.');
+  if (consistCls === 'sc-bad') bottlenecks.push('Consistency is the core problem — hit the window every night.');
+  else if (consistCls === 'sc-warn') bottlenecks.push('Consistency needs work — fewer exceptions this week.');
+  if (effCls === 'sc-bad') bottlenecks.push('Low efficiency — you\'re lying awake too long. Check phone/light in bed.');
+  else if (effCls === 'sc-warn') bottlenecks.push('Efficiency below target — wind-down routine may need tightening.');
+  if (recovCls === 'sc-bad') bottlenecks.push('Recovery low despite sleep — check stress, alcohol, or late eating.');
+  else if (recovCls === 'sc-warn') bottlenecks.push('Recovery is moderate — look for non-sleep stressors.');
+
+  const allOk = consistCls === 'sc-ok' && (effCls === 'sc-ok' || effCls === 'sc-empty') && (recovCls === 'sc-ok' || recovCls === 'sc-empty') && (debtCls === 'sc-ok' || debtCls === 'sc-empty');
+
+  let html = '';
+  if (allOk) {
+    html += '<div class="sc-ok-banner">✓ All tracked metrics on target this week.</div>';
+  } else if (bottlenecks.length > 0) {
+    html += `<div class="sc-bottleneck">⚠ Bottleneck: ${bottlenecks[0]}</div>`;
+  }
+  html += '<div class="scorecard">';
+  html += card(consistPct, 'Consistency', 'target ≥6/7 nights', consistCls, 'Too many missed or social nights.', '%');
+  html += card(effAvg, 'Sleep efficiency', 'target ≥85%', effCls, 'Reduce time awake in bed.', '%');
+  html += card(recovAvg, 'Recovery', 'target ≥67%', recovCls, 'Non-sleep stressor likely.', '%');
+  html += card(debtAvg, 'Sleep debt', 'target <30 min', debtCls, 'Get more time in bed.', 'm');
+  html += '</div>';
+  area.innerHTML = html;
+}
+
 // ── Render: stats ─────────────────────────────────────────────────────────────
 function renderStats() {
   const days=[]; for(let i=1;i<=7;i++) days.push(daysAgo(i));
@@ -1101,7 +1201,7 @@ function renderAll() {
   renderHealthPanel();
   renderRamp();
   renderDerived();renderModeExplain();renderLifestyleToggles();renderAlert();
-  renderTimeline();renderStats();renderTrend();
+  renderTimeline();renderScorecard();renderStats();renderTrend();
   renderHmWeekdays();renderHeatmap();renderWeekdays();renderGrid();renderLevers();
 }
 
@@ -1112,7 +1212,7 @@ function correctAutofill(status){ const y=yesterday();state.data[y]=state.data[y
 function dismissAutofill(){ clearAutofillFlag(yesterday());renderAll(); }
 function saveWhoopDaily(){
   const iso=yesterday();
-  const fields=[['gapIn','gap',0,360],['latIn','lat',0,120]];
+  const fields=[['gapIn','gap',0,360],['latIn','lat',0,120],['recovIn','recov',0,100],['effDailyIn','effDaily',0,100]];
   let changed=false;
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
