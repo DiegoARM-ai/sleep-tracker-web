@@ -293,6 +293,28 @@ button.valve-btn:hover { background: #e1bee7; }
     </div>
   </div>
 
+  <!-- ── Daily WHOOP quick-log ── -->
+  <div class="section-h" style="margin-top:20px;">WHOOP — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">log daily after waking</span></div>
+  <div class="card" style="padding:14px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="whoop-field" style="flex:1;min-width:120px;">
+        <label>Sleep debt (min)</label>
+        <input type="number" id="gapIn" placeholder="e.g. 45" min="0" max="360" style="width:100%">
+        <div class="hint">Whoop app → <b>Sleep</b> → "Sleep Debt" number at top. Target &lt;30 min.</div>
+      </div>
+      <div class="whoop-field" style="flex:1;min-width:120px;">
+        <label>Sleep latency (min)</label>
+        <input type="number" id="latIn" placeholder="e.g. 12" min="0" max="120" style="width:100%">
+        <div class="hint">Whoop app → <b>Sleep</b> → "Latency". Target &lt;20 min.</div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="primary" onclick="saveWhoopDaily()" style="flex:1;min-width:140px;">Save WHOOP data</button>
+      <span class="save-flash" id="saveFlashDaily">✓ Saved</span>
+    </div>
+    <div class="hint" style="margin-top:8px;color:#aaa;">Skip if you don't have Whoop open — you can log anytime. HRV &amp; RHR are in the weekly section below (Settings).</div>
+  </div>
+
   <div class="section-h">Adherence</div>
   <div id="statsArea"></div>
 
@@ -319,32 +341,27 @@ button.valve-btn:hover { background: #e1bee7; }
     <div class="levers" id="leversGrid" style="margin-top:8px"></div>
   </details>
   <details class="collapse">
-    <summary>Log Whoop metrics</summary>
+    <summary>WHOOP — weekly metrics (update Sundays)</summary>
     <div class="card" style="margin-top:10px">
+      <div class="tiny" style="margin-bottom:10px;padding:8px 10px;background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;color:#0d47a1;line-height:1.6;">
+        📅 <b>Update these once a week, every Sunday morning.</b><br>
+        Open Whoop → Coach → Recovery to find HRV &amp; RHR.<br>
+        Sleep debt &amp; latency are logged daily in the card above.
+      </div>
       <div class="whoop-grid">
-        <div class="whoop-field">
-          <label>Sleep debt (min)</label>
-          <input type="number" id="gapIn" placeholder="e.g. 45" min="0" max="360">
-          <div class="hint">Whoop "Sleep Need − Actual". Target &lt;30 min.</div>
-        </div>
         <div class="whoop-field">
           <label>Pre-bed RHR (bpm)</label>
           <input type="number" id="rhrIn" placeholder="e.g. 54" min="30" max="100">
-          <div class="hint">Target &lt;55 bpm.</div>
+          <div class="hint">Whoop → <b>Recovery</b> → Resting Heart Rate. Target &lt;55.</div>
         </div>
         <div class="whoop-field">
           <label>HRV (ms)</label>
           <input type="number" id="hrvIn" placeholder="e.g. 68" min="10" max="200">
-          <div class="hint">Higher = better recovery.</div>
-        </div>
-        <div class="whoop-field">
-          <label>Sleep latency (min)</label>
-          <input type="number" id="latIn" placeholder="e.g. 12" min="0" max="120">
-          <div class="hint">Target &lt;20 min.</div>
+          <div class="hint">Whoop → <b>Recovery</b> → HRV. Higher = better.</div>
         </div>
       </div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
-        <button class="primary" onclick="saveWhoop()">Save Whoop data</button>
+        <button class="primary" onclick="saveWhoopWeekly()">Save weekly metrics</button>
         <span class="save-flash" id="saveFlash">✓ Saved</span>
       </div>
     </div>
@@ -1059,9 +1076,19 @@ function cycleDay(iso){ const cur=state.data[iso]&&state.data[iso].status;const 
 function logLastNight(status){ const iso=yesterday();state.data[iso]=state.data[iso]||{};state.data[iso].status=status;delete state.data[iso].auto;if(status==='no')showLeverPicker(iso);saveState(state);renderAll(); }
 function correctAutofill(status){ const y=yesterday();state.data[y]=state.data[y]||{};state.data[y].status=status;delete state.data[y].auto;if(status==='no')showLeverPicker(y);saveState(state);renderAll(); }
 function dismissAutofill(){ clearAutofillFlag(yesterday());renderAll(); }
-function saveWhoop(){
+function saveWhoopDaily(){
   const iso=yesterday();
-  const fields=[['gapIn','gap',0,360],['rhrIn','rhr',30,100],['hrvIn','hrv',10,200],['latIn','lat',0,120]];
+  const fields=[['gapIn','gap',0,360],['latIn','lat',0,120]];
+  let changed=false;
+  for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
+  if(!changed)return;
+  saveState(state);renderAll();
+  fields.forEach(([id])=>document.getElementById(id).value='');
+  const flash=document.getElementById('saveFlashDaily');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
+}
+function saveWhoopWeekly(){
+  const iso=yesterday();
+  const fields=[['rhrIn','rhr',30,100],['hrvIn','hrv',10,200]];
   let changed=false;
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
@@ -1069,6 +1096,8 @@ function saveWhoop(){
   fields.forEach(([id])=>document.getElementById(id).value='');
   const flash=document.getElementById('saveFlash');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
 }
+// Legacy — kept for backward compat
+function saveWhoop(){ saveWhoopDaily(); }
 function saveNeed(){
   const raw=document.getElementById('needInput').value;
   const mins=parseNeedHhmm(raw);
@@ -1110,6 +1139,13 @@ function clearOverride(){ state.settings.viewOverride=null;saveState(state);setV
 // ── Init ──────────────────────────────────────────────────────────────────────
 autoDefaultIfDue(); runDailyGateCheck();
 if (isEmergencyMode() || !systemHealthy()) { state.health.dismissed = false; }
+
+// Reset any stale view override from a previous session so the app always
+// opens to the correct time-of-day view (morning before 2 PM, evening after).
+if (state.settings.viewOverride) {
+  state.settings.viewOverride = null;
+  saveState(state);
+}
 
 document.getElementById('wakeInput').value=state.settings.wake;
 document.getElementById('wakeInput').addEventListener('change',function(e){ state.settings.wake=e.target.value;document.getElementById('wakeInputEv').value=e.target.value;saveState(state);renderAll(); });
