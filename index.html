@@ -541,8 +541,9 @@ const HEALTH_ITEMS = [
   { id:'hue',         label:'Hue automations enabled',     note:'Wind-Down 10 PM · Sleep Ramp 10:30 PM · Wake Up 8:45 AM', critical:false },
   { id:'shortcut',    label:'Good Night Shortcut',         note:'Automation fires at 11:15 PM nightly',             critical:false },
   { id:'hallway',     label:'Phone lockbox',               note:'Phone locked away before bed — lockbox in place',  critical:false },
-  { id:'whoop',       label:'Whoop charged & wearing',     note:'Needed for debt tracking and auto-detection',      critical:false },
-  { id:'tracker',     label:'Sleep need updated in tracker', note:'Settings → sleep need → type Whoop value',       critical:false },
+  { id:'oura',        label:'Oura charged & wearing',       note:'Needed for Sleep Score, Efficiency, Latency',     critical:false },
+  { id:'whoop',       label:'Whoop charged & wearing',     note:'Needed for sleep debt tracking',                   critical:false },
+  { id:'tracker',     label:'Sleep need checked this week', note:'Settings → sleep need → update if Whoop avg changed by >15 min', critical:false },
 ];
 
 const LEVERS = [
@@ -863,8 +864,7 @@ function buildSchedule() {
     {time:toMin(TIER1.coldTurkey), label:'Router WiFi off',        tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
     {time:toMin(TIER1.coldTurkey), label:'Cold Turkey starts',     tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
     {time:toMin(TIER1.screenTime), label:'Screen Time Downtime',   tag:'fixed',    key:'blockade', note:'Always 11:30 PM', tier:1, lateOk:true},
-    {time:wake-15,  label:'Hue Sunrise',              tag:'auto',   key:'anchor', note:'', tier:1, lateOk:true},
-    {time:wake,     label:'Wake alarm',                tag:'auto',   key:'anchor', note:'', tier:1, lateOk:true},
+    {time:wake-15,  label:'Hue Sunrise + Wake alarm',  tag:'auto',   key:'anchor', note:'Sunrise 8:45 AM · Alarm 9:00 AM', tier:1, lateOk:true},
     {time:wake+30,  label:'Morning sunlight (10 min)', tag:'manual', key:'anchor', note:'Strongest circadian cue', tier:1, lateOk:true},
   ];
   const nowM = nowMinutes();
@@ -1180,9 +1180,9 @@ function renderAlert() {
   }
   if(state.settings.sleepNeedUpdatedAt){
     if(daysBetween(state.settings.sleepNeedUpdatedAt,today())>=NEED_STALE_DAYS)
-      html+=`<div class="alert info">📋 Sleep need is ${daysBetween(state.settings.sleepNeedUpdatedAt,today())} days old — update from Whoop weekly avg.</div>`;
+      html+=`<div class="alert info">📋 Sleep need is ${daysBetween(state.settings.sleepNeedUpdatedAt,today())} days old — check Settings if Whoop avg has shifted by more than 15 min.</div>`;
   } else {
-    html+=`<div class="alert info">📋 <b>Set your Whoop sleep need in Settings</b> to calibrate targets. Default is 9h 15m.</div>`;
+    html+=`<div class="alert info">📋 <b>Set your sleep need in Settings</b> to calibrate targets. Default is 9h 15m.</div>`;
   }
   let valves=0; for(let i=1;i<=7;i++){const d=daysAgo(i);if(state.valves[d])valves+=state.valves[d];}
   if(valves>=3) html+=`<div class="alert">⚠ <b>${valves} pressure valves in 7 days.</b> Leading indicator of system decay.</div>`;
