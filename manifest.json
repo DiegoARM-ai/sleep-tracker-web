@@ -1,6 +1,6 @@
 {
-  "name": "Sleep Tracker",
-  "short_name": "Sleep",
+  "name": "Somnus",
+  "short_name": "Somnus",
   "description": "Diego's sleep protocol tracker",
   "start_url": "./",
   "display": "standalone",

@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sleep Tracker — Diego</title>
+<title>Somnus</title>
 
 <!-- PWA / home screen -->
 <link rel="manifest" href="./manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Sleep">
+<meta name="apple-mobile-web-app-title" content="Somnus">
 <meta name="theme-color" content="#1a73e8">
 <link rel="apple-touch-icon" href="./icon-192.png">
 
@@ -263,7 +263,7 @@ button.valve-btn:hover { background: #e1bee7; }
 </style>
 </head>
 <body>
-<h1>Sleep Tracker v9</h1>
+<h1>Somnus</h1>
 <div class="sub">Morning: log last night. Evening: see what's next.</div>
 <div class="view-toggle" role="tablist">
   <button id="viewMorningBtn" class="active" onclick="setView('morning',true)">Morning</button>
@@ -441,7 +441,7 @@ button.valve-btn:hover { background: #e1bee7; }
   </details>
 </div>
 
-<div class="tiny" style="margin-top:20px;">Data in URL hash — bookmark to preserve your log. <span id="viewInfo"></span></div>
+<div class="tiny" style="margin-top:20px;">Data saved locally on this device. <span id="viewInfo"></span></div>
 
 <script>
 // ── PWA Service Worker ─────────────────────────────────────────────────────────
@@ -504,30 +504,43 @@ const DEFAULTS = {
   health:{ checks:{}, lastChecked:null, dismissed:false },
   emergency:{ active:false, manualOverride:null }
 };
+const STORAGE_KEY = 'somnus_state_v1';
+function parseAndMerge(decoded) {
+  const merged = Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), decoded);
+  merged.settings = Object.assign({}, DEFAULTS.settings, merged.settings||{});
+  merged.settings.lifestyle = Object.assign({caffeine:false,alcohol:false}, merged.settings.lifestyle||{});
+  if (merged.settings.mode==='PT') merged.settings.mode='PT_ADAPTED';
+  if (!merged.settings.sleepNeedMin) merged.settings.sleepNeedMin = DEFAULT_SLEEP_NEED_MIN;
+  if (!merged.settings.efficiencyPct) merged.settings.efficiencyPct = DEFAULT_EFFICIENCY_PCT;
+  merged.data = merged.data||{}; merged.valves = merged.valves||{};
+  if (typeof merged.ramp==='undefined') merged.ramp = null;
+  merged.health = Object.assign({checks:{},lastChecked:null,dismissed:false}, merged.health||{});
+  merged.emergency = Object.assign({active:false,manualOverride:null}, merged.emergency||{});
+  Object.keys(merged.data).forEach(iso => {
+    const e = merged.data[iso];
+    if (e&&e.lever&&!e.levers) { e.levers=[normalizeLeverKey(e.lever)]; delete e.lever; }
+    if (e&&e.levers) e.levers = e.levers.map(normalizeLeverKey);
+  });
+  return merged;
+}
 function loadState() {
   try {
+    // One-time import from URL hash (for migrating data from Cowork artifact)
     const hash = location.hash.replace(/^#/,'');
-    if (!hash) return JSON.parse(JSON.stringify(DEFAULTS));
-    const decoded = JSON.parse(decodeURIComponent(atob(hash)));
-    const merged = Object.assign(JSON.parse(JSON.stringify(DEFAULTS)), decoded);
-    merged.settings = Object.assign({}, DEFAULTS.settings, merged.settings||{});
-    merged.settings.lifestyle = Object.assign({caffeine:false,alcohol:false}, merged.settings.lifestyle||{});
-    if (merged.settings.mode==='PT') merged.settings.mode='PT_ADAPTED';
-    if (!merged.settings.sleepNeedMin) merged.settings.sleepNeedMin = DEFAULT_SLEEP_NEED_MIN;
-    if (!merged.settings.efficiencyPct) merged.settings.efficiencyPct = DEFAULT_EFFICIENCY_PCT;
-    merged.data = merged.data||{}; merged.valves = merged.valves||{};
-    if (typeof merged.ramp==='undefined') merged.ramp = null;
-    merged.health = Object.assign({checks:{},lastChecked:null,dismissed:false}, merged.health||{});
-    merged.emergency = Object.assign({active:false,manualOverride:null}, merged.emergency||{});
-    Object.keys(merged.data).forEach(iso => {
-      const e = merged.data[iso];
-      if (e&&e.lever&&!e.levers) { e.levers=[normalizeLeverKey(e.lever)]; delete e.lever; }
-      if (e&&e.levers) e.levers = e.levers.map(normalizeLeverKey);
-    });
-    return merged;
+    if (hash) {
+      const decoded = JSON.parse(decodeURIComponent(atob(hash)));
+      const merged = parseAndMerge(decoded);
+      saveState(merged); // persist to localStorage
+      history.replaceState(null, '', location.pathname); // clean URL
+      return merged;
+    }
+    // Normal load from localStorage
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return JSON.parse(JSON.stringify(DEFAULTS));
+    return parseAndMerge(JSON.parse(stored));
   } catch(e) { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
-function saveState(s) { try { location.hash = btoa(encodeURIComponent(JSON.stringify(s))); } catch(e){} }
+function saveState(s) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch(e){} }
 let state = loadState();
 let pendingLeverDate = null;
 
