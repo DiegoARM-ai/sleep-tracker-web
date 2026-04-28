@@ -313,6 +313,17 @@ button.valve-btn:hover { background: #e1bee7; }
     <button class="warn" onclick="logLastNight('no')">✕ Missed</button>
   </div>
   <div id="lastNightStatus" style="margin-top:8px;font-size:13px;font-weight:600;min-height:18px;"></div>
+  <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+    <div class="whoop-field">
+      <label>Actual in-bed time <span style="font-weight:400;color:#bbb;">last night</span></label>
+      <input type="time" id="inBedIn" style="width:140px;">
+      <div class="hint">When the light went off. Verifies ramp target is being hit.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding-bottom:18px;">
+      <button class="primary" onclick="saveInBedTime()" style="padding:8px 16px;font-size:12px;min-height:36px;">Save</button>
+      <span class="save-flash" id="saveFlashInBed">✓ Saved</span>
+    </div>
+  </div>
   <div id="leverPickerBox" class="lever-picker hidden">
     <div class="lever-picker-title">Which levers broke last night? <span>Pick all that apply</span></div>
     <div class="lever-checks" id="leverChecks"></div>
@@ -711,11 +722,34 @@ function advancesEarned() {
 function rampTotalSteps() { if(!state.ramp)return 0; return Math.max(0,Math.ceil((toSignedSleep(state.ramp.startOnset)-toSignedSleep(finalSleepHhmm()))/RAMP_STEP_MIN)); }
 function rampComplete() { return !!state.ramp && !isEmergencyMode() && activeSleepTarget()===finalSleepHhmm(); }
 
+// Returns last-7-nights actual in-bed data vs ramp target for each night
+function weeklyActualData() {
+  const out = [];
+  for (let i = 1; i <= 7; i++) {
+    const iso = daysAgo(i);
+    const d = state.data[iso] || {};
+    const target = activeSleepTargetForDate(iso);
+    const targetSigned = toSignedSleep(target);
+    const inBedSigned = d.inBedTime ? toSignedSleep(d.inBedTime) : null;
+    const delta = inBedSigned !== null ? inBedSigned - targetSigned : null; // positive = late, negative = early
+    const latency = typeof d.ouraLat === 'number' ? d.ouraLat : null;
+    out.push({ iso, inBedSigned, targetSigned, delta, latency });
+  }
+  return out;
+}
+
 // ── Gate ──────────────────────────────────────────────────────────────────────
 function evaluateGate() {
   const entries=[]; for(let i=1;i<=7;i++) entries.push(state.data[daysAgo(i)]);
   const logged=entries.filter(Boolean);
-  if(logged.length<RAMP_MIN_DATA) return{decision:'wait',rate:null,logged:logged.length,needed:RAMP_MIN_DATA,debtAvg:null,debtDir:null,debtFlag:false};
+  const wd=weeklyActualData(); const withInBed=wd.filter(d=>d.delta!==null);
+  let inBedFlag=false,aheadFlag=false,avgInBedDelta=null;
+  if(withInBed.length>=4){
+    avgInBedDelta=Math.round(withInBed.reduce((s,d)=>s+d.delta,0)/withInBed.length);
+    if(avgInBedDelta>30) inBedFlag=true;
+    if(avgInBedDelta<-20) aheadFlag=true;
+  }
+  if(logged.length<RAMP_MIN_DATA) return{decision:'wait',rate:null,logged:logged.length,needed:RAMP_MIN_DATA,debtAvg:null,debtDir:null,debtFlag:false,inBedFlag,aheadFlag,avgInBedDelta};
   const good=logged.filter(e=>e.status==='yes'||e.status==='social').length;
   const rate=good/logged.length;
   const adherenceClear=rate>=RAMP_GATE_RATE;
@@ -731,7 +765,7 @@ function evaluateGate() {
     }
     if(adherenceClear&&debtAvg>=DEBT_CAUTION_MIN&&debtDir==='rising') debtFlag=true;
   }
-  return{decision:adherenceClear?'advance':'hold',rate,logged:logged.length,debtAvg,debtDir,debtFlag};
+  return{decision:adherenceClear?'advance':'hold',rate,logged:logged.length,debtAvg,debtDir,debtFlag,inBedFlag,aheadFlag,avgInBedDelta};
 }
 function runDailyGateCheck() {
   if(!state.ramp||!state.ramp.startedAt||rampComplete()||isEmergencyMode())return;
@@ -978,6 +1012,27 @@ function renderRamp() {
   const calWeek=currentRampWeek();
   let stepsHtml='';
   for(let i=0;i<total;i++){ let cls='ramp-step'; if(i<earned)cls+=' done'; else if(i===earned&&!isDone)cls+=' current'; stepsHtml+=`<div class="${cls}"></div>`; }
+
+  // ── Actual in-bed line ────────────────────────────────────────────────────
+  const wd=weeklyActualData();
+  const withInBed=wd.filter(d=>d.delta!==null);
+  const withBoth=wd.filter(d=>d.delta!==null&&d.latency!==null);
+  let actualLineHtml='';
+  if(withInBed.length>=2){
+    const avgDelta=Math.round(withInBed.reduce((s,d)=>s+d.delta,0)/withInBed.length);
+    const absAvg=Math.abs(avgDelta);
+    const deltaLabel=absAvg<=5?'on target':avgDelta>0?`+${avgDelta}m late`:`${absAvg}m early`;
+    const deltaColor=absAvg<=15?'#1b5e20':avgDelta>30?'#b71c1c':'#e65100';
+    let onsetStr='';
+    if(withBoth.length>=2){
+      const avgInBed=withBoth.reduce((s,d)=>s+d.inBedSigned,0)/withBoth.length;
+      const avgLat=withBoth.reduce((s,d)=>s+d.latency,0)/withBoth.length;
+      onsetStr=` · onset ~${fmtR(fromSignedSleep(avgInBed+avgLat))}`;
+    }
+    actualLineHtml=`<div style="margin-top:5px;font-size:11px;color:#555;">This week: <b style="color:${deltaColor}">${deltaLabel} to bed</b>${onsetStr} <span style="color:#bbb;">(${withInBed.length}/7 nights)</span></div>`;
+  }
+
+  // ── Status ────────────────────────────────────────────────────────────────
   let statusHtml='';
   if(isDone){ statusHtml=`<div class="ramp-status done"><b>✓ Ramp complete.</b> In-bed target locked at <b>${fmtR(toMin(final))}</b>.</div>`; }
   else {
@@ -985,13 +1040,15 @@ function renderRamp() {
     const daysToNext=7-(daysElapsed%7); const pill=debtPillHtml(g.debtAvg,g.debtDir);
     const nextSigned=toSignedSleep(active)-RAMP_STEP_MIN; const nextFinal=toSignedSleep(final);
     const nextTime=fmtR(fromSignedSleep(nextSigned<=nextFinal?nextFinal:nextSigned));
+    const lateSuffix=g.inBedFlag?`<br>⚠ Avg in-bed <b>+${g.avgInBedDelta}m late</b> — hitting "yes" but missing the target time.`:'';
+    const aheadSuffix=g.aheadFlag?`<br>↑ Tracking <b>${Math.abs(g.avgInBedDelta)}m ahead</b> of target — hold pace, let it consolidate.`:'';
     if(g.decision==='wait') statusHtml=`<div class="ramp-status">⏳ <b>Gathering data.</b> Need ${g.needed}+ nights; have ${g.logged}. Next check in ${daysToNext}d. Debt: ${pill}</div>`;
-    else if(g.decision==='advance'&&!g.debtFlag) statusHtml=`<div class="ramp-status"><b>✓ On track.</b> Adherence: <b>${rateStr}</b> · Debt: ${pill}<br>Advances to <b>${nextTime}</b> in ${daysToNext}d.</div>`;
-    else if(g.decision==='advance'&&g.debtFlag) statusHtml=`<div class="ramp-status caution">⚠ <b>Advancing cautiously.</b> ${rateStr} ✓ · Debt: ${pill}<br>Advances to <b>${nextTime}</b> in ${daysToNext}d, but debt is high and rising.</div>`;
-    else statusHtml=`<div class="ramp-status hold">⚠ <b>Holding at ${fmtR(toMin(active))}.</b> Adherence: <b>${rateStr}</b> (need ≥80%) · Debt: ${pill}</div>`;
+    else if(g.decision==='advance'&&!g.debtFlag) statusHtml=`<div class="ramp-status"><b>✓ On track.</b> Adherence: <b>${rateStr}</b> · Debt: ${pill}<br>Advances to <b>${nextTime}</b> in ${daysToNext}d.${lateSuffix}${aheadSuffix}</div>`;
+    else if(g.decision==='advance'&&g.debtFlag) statusHtml=`<div class="ramp-status caution">⚠ <b>Advancing cautiously.</b> ${rateStr} ✓ · Debt: ${pill}<br>Advances to <b>${nextTime}</b> in ${daysToNext}d, but debt is high and rising.${lateSuffix}</div>`;
+    else statusHtml=`<div class="ramp-status hold">⚠ <b>Holding at ${fmtR(toMin(active))}.</b> Adherence: <b>${rateStr}</b> (need ≥80%) · Debt: ${pill}${lateSuffix}</div>`;
   }
   const np=hhmmFromMin(fromSignedSleep(Math.max(toSignedSleep(active)-RAMP_STEP_MIN,toSignedSleep(final))));
-  container.innerHTML=`<div class="ramp-card"><div class="ramp-header"><span class="ramp-title">⏱ Bedtime ramp</span><span class="ramp-week">Week ${calWeek+1} · day ${daysElapsed%7+1}/7</span></div><div class="ramp-target">In-bed: ${fmtR(toMin(active))}</div><div class="ramp-final">Final: ${fmtR(toMin(final))}${isDone?'':' · Next: '+fmtR(toMin(np))}</div>${total>0?`<div class="ramp-progress">${stepsHtml}</div>`:''}<div class="ramp-tier1">📌 Tier 1 cues every night: Lights 9:30 PM · Shower 10 PM · Full digital blockade 10:30 PM</div>${statusHtml}</div>`;
+  container.innerHTML=`<div class="ramp-card"><div class="ramp-header"><span class="ramp-title">⏱ Bedtime ramp</span><span class="ramp-week">Week ${calWeek+1} · day ${daysElapsed%7+1}/7</span></div><div class="ramp-target">In-bed: ${fmtR(toMin(active))}</div><div class="ramp-final">Final: ${fmtR(toMin(final))}${isDone?'':' · Next: '+fmtR(toMin(np))}</div>${total>0?`<div class="ramp-progress">${stepsHtml}</div>`:''}<div class="ramp-tier1">📌 Tier 1 cues every night: Lights 9:30 PM · Shower 10 PM · Full digital blockade 10:30 PM</div>${actualLineHtml}${statusHtml}</div>`;
 }
 
 // ── Render: derived ───────────────────────────────────────────────────────────
@@ -1233,6 +1290,13 @@ function renderMorningStatus() {
     else { if (!el.matches(':focus')) { el.value = ''; } el.style.outline = ''; el.style.outlineOffset = ''; }
   }
 
+  // Pre-fill actual in-bed time if saved
+  const inBedEl = document.getElementById('inBedIn');
+  if (inBedEl) {
+    if (d.inBedTime) { inBedEl.value = d.inBedTime; inBedEl.style.outline = '2px solid #a5d6a7'; inBedEl.style.outlineOffset = '1px'; }
+    else { if (!inBedEl.matches(':focus')) inBedEl.value = ''; inBedEl.style.outline = ''; inBedEl.style.outlineOffset = ''; }
+  }
+
   // Pre-fill Whoop debt input with saved value if it exists
   const gapEl = document.getElementById('gapIn');
   if (gapEl) {
@@ -1264,6 +1328,15 @@ function saveOuraDaily(){
   if(!changed)return;
   saveState(state);renderAll();
   const flash=document.getElementById('saveFlashOura');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
+}
+function saveInBedTime(){
+  const iso=yesterday();
+  const v=document.getElementById('inBedIn').value;
+  if(!v)return;
+  state.data[iso]=state.data[iso]||{};
+  state.data[iso].inBedTime=v;
+  saveState(state);renderAll();
+  const flash=document.getElementById('saveFlashInBed');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
 }
 function saveWhoopDaily(){
   const iso=yesterday();
