@@ -530,14 +530,14 @@ const DEBT_TARGET_MIN = 30;
 const DEBT_CAUTION_MIN = 60;
 const EMERGENCY_DEBT_MIN = 90;
 
-const TIER1 = { shower:'22:00', hueDim:'22:30', coldTurkey:'23:00', screenTime:'23:30' };
+const TIER1 = { shower:'22:00', hueDim:'22:30', coldTurkey:'23:00', screenTime:'22:30' };
 const EMERGENCY_INBED = '22:30';
 const LATE_MODE_THRESHOLD = '23:00'; // ⚠️ Past this time, lateOk:false events are hidden
 
 const HEALTH_ITEMS = [
   { id:'router',      label:'Router WiFi schedule',       note:'Off at 11:00 PM — check your router app',          critical:true  },
   { id:'coldturkey',  label:'Cold Turkey "ET Home" block', note:'Locked schedule active on Mac — browsers + apps',  critical:true  },
-  { id:'screentime',  label:'iOS Screen Time Downtime',    note:'11:30 PM, passcode held by trusted person',        critical:true  },
+  { id:'screentime',  label:'iOS Screen Time Downtime',    note:'10:30 PM, passcode held by trusted person',        critical:true  },
   { id:'hue',         label:'Hue automations enabled',     note:'Wind-Down 10 PM · Sleep Ramp 10:30 PM · Wake Up 8:45 AM', critical:false },
   { id:'shortcut',    label:'Good Night Shortcut',         note:'Automation fires at 11:15 PM nightly',             critical:false },
   { id:'hallway',     label:'Phone lockbox',               note:'Phone locked away before bed — lockbox in place',  critical:false },
@@ -863,7 +863,7 @@ function buildSchedule() {
     {time:tier2Pre(45),            label:'Magnesium glycinate',   tag:'manual',   key:'thermo',   note:'200–400 mg, 45 min before bed', tier:2, lateOk:false, lateExpiry:tier2Pre(45)+30},
     {time:toMin(TIER1.coldTurkey), label:'Router WiFi off',        tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
     {time:toMin(TIER1.coldTurkey), label:'Cold Turkey starts',     tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
-    {time:toMin(TIER1.screenTime), label:'Screen Time Downtime',   tag:'fixed',    key:'blockade', note:'Always 11:30 PM', tier:1, lateOk:true},
+    {time:toMin(TIER1.screenTime), label:'Screen Time Downtime',   tag:'fixed',    key:'blockade', note:'Always 10:30 PM', tier:1, lateOk:true},
     {time:wake-15,  label:'Hue Sunrise + Wake alarm',  tag:'auto',   key:'anchor', note:'Sunrise 8:45 AM · Alarm 9:00 AM', tier:1, lateOk:true},
     {time:wake+30,  label:'Morning sunlight (10 min)', tag:'manual', key:'anchor', note:'Strongest circadian cue', tier:1, lateOk:true},
   ];
@@ -1272,7 +1272,7 @@ function logValveTonight(){
   if(btn){btn.textContent='✓ Valve logged ('+state.valves[iso]+' tonight)';setTimeout(()=>btn.innerHTML='♘ I used a pressure valve tonight',2500);}
 }
 function restartSystem(){
-  alert('RESTART CHECKLIST\n\n1. Router WiFi schedule on (11 PM off)\n2. Cold Turkey "ET Home" locked\n3. Screen Time Downtime 11:30 PM, passcode external\n4. Hue automations enabled\n5. Phone hallway pad in place\n\nValve count will reset.');
+  alert('RESTART CHECKLIST\n\n1. Router WiFi schedule on (11 PM off)\n2. Cold Turkey "ET Home" locked\n3. Screen Time Downtime 10:30 PM, passcode external\n4. Hue automations enabled\n5. Phone hallway pad in place\n\nValve count will reset.');
   for(let i=0;i<7;i++) delete state.valves[daysAgo(i)];
   state.health.dismissed=false; state.health.checks={};
   saveState(state);renderAll();
