@@ -860,7 +860,7 @@ function buildSchedule() {
     {time:toMin(inBedHhmm)%1440, label: emergency ? '🚨 In-bed — Emergency target' : 'In-bed target', tag:'manual', key:'stim', note: emergency ? 'Emergency mode: 10:30 PM every night until debt <45 min' : 'Wind-down cues running since 10 PM', tier:2, lateOk:true},
     {time:toMin(TIER1.shower),     label:'Warm shower (10 min)', tag:'fixed',    key:'thermo',   note:'Always 10:00 PM — skip if past 11 PM', tier:1, lateOk:false, lateExpiry:toMin('23:00')},
     {time:toMin(TIER1.hueDim),     label:'Hue Wind-Down',         tag:'fixed',    key:'thermo',   note:'Always 10:30 PM', tier:1, lateOk:true},
-    {time:toMin('22:45'),          label:'Magnesium glycinate',   tag:'manual',   key:'thermo',   note:'200–400 mg, 45 min before bed', tier:2, lateOk:false, lateExpiry:toMin('23:15')},
+    {time:tier2Pre(45),            label:'Magnesium glycinate',   tag:'manual',   key:'thermo',   note:'200–400 mg, 45 min before bed', tier:2, lateOk:false, lateExpiry:tier2Pre(45)+30},
     {time:toMin(TIER1.coldTurkey), label:'Router WiFi off',        tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
     {time:toMin(TIER1.coldTurkey), label:'Cold Turkey starts',     tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
     {time:toMin(TIER1.screenTime), label:'Screen Time Downtime',   tag:'fixed',    key:'blockade', note:'Always 11:30 PM', tier:1, lateOk:true},
