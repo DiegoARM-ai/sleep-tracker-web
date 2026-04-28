@@ -312,6 +312,7 @@ button.valve-btn:hover { background: #e1bee7; }
     <button class="amber" onclick="logLastNight('social')">● Social exception</button>
     <button class="warn" onclick="logLastNight('no')">✕ Missed</button>
   </div>
+  <div id="lastNightStatus" style="margin-top:8px;font-size:13px;font-weight:600;min-height:18px;"></div>
   <div id="leverPickerBox" class="lever-picker hidden">
     <div class="lever-picker-title">Which levers broke last night? <span>Pick all that apply</span></div>
     <div class="lever-checks" id="leverChecks"></div>
@@ -530,12 +531,12 @@ const DEBT_TARGET_MIN = 30;
 const DEBT_CAUTION_MIN = 60;
 const EMERGENCY_DEBT_MIN = 90;
 
-const TIER1 = { shower:'22:00', hueDim:'22:30', coldTurkey:'23:00', screenTime:'22:30' };
+const TIER1 = { shower:'22:00', hueDim:'22:30', coldTurkey:'22:30', screenTime:'22:30' };
 const EMERGENCY_INBED = '22:30';
 const LATE_MODE_THRESHOLD = '23:00'; // ⚠️ Past this time, lateOk:false events are hidden
 
 const HEALTH_ITEMS = [
-  { id:'router',      label:'Router WiFi schedule',       note:'Off at 11:00 PM — check your router app',          critical:true  },
+  { id:'router',      label:'Router WiFi schedule',       note:'Off at 10:30 PM — check your router app',          critical:true  },
   { id:'coldturkey',  label:'Cold Turkey "ET Home" block', note:'Locked schedule active on Mac — browsers + apps',  critical:true  },
   { id:'screentime',  label:'iOS Screen Time Downtime',    note:'10:30 PM, passcode held by trusted person',        critical:true  },
   { id:'hue',         label:'Hue automations enabled',     note:'Wind-Down 10 PM · Sleep Ramp 10:30 PM · Wake Up 8:45 AM', critical:false },
@@ -861,9 +862,7 @@ function buildSchedule() {
     {time:toMin(TIER1.shower),     label:'Warm shower (10 min)', tag:'fixed',    key:'thermo',   note:'Always 10:00 PM — skip if past 11 PM', tier:1, lateOk:false, lateExpiry:toMin('23:00')},
     {time:toMin(TIER1.hueDim),     label:'Hue Wind-Down',         tag:'fixed',    key:'thermo',   note:'Always 10:30 PM', tier:1, lateOk:true},
     {time:tier2Pre(45),            label:'Magnesium glycinate',   tag:'manual',   key:'thermo',   note:'200–400 mg, 45 min before bed', tier:2, lateOk:false, lateExpiry:tier2Pre(45)+30},
-    {time:toMin(TIER1.coldTurkey), label:'Router WiFi off',        tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
-    {time:toMin(TIER1.coldTurkey), label:'Cold Turkey starts',     tag:'fixed',    key:'blockade', note:'Always 11:00 PM', tier:1, lateOk:true},
-    {time:toMin(TIER1.screenTime), label:'Screen Time Downtime',   tag:'fixed',    key:'blockade', note:'Always 10:30 PM', tier:1, lateOk:true},
+    {time:toMin(TIER1.coldTurkey), label:'Digital blockade',        tag:'fixed',    key:'blockade', note:'Router WiFi off · Cold Turkey · Screen Time Downtime', tier:1, lateOk:true},
     {time:wake-15,  label:'Hue Sunrise + Wake alarm',  tag:'auto',   key:'anchor', note:'Sunrise 8:45 AM · Alarm 9:00 AM', tier:1, lateOk:true},
     {time:wake+30,  label:'Morning sunlight (10 min)', tag:'manual', key:'anchor', note:'Strongest circadian cue', tier:1, lateOk:true},
   ];
@@ -970,7 +969,7 @@ function renderRamp() {
   }
   if(!state.ramp){
     const final=finalSleepHhmm();
-    container.innerHTML=`<div class="ramp-calibration"><h3>⏱ Set up your bedtime ramp</h3><p>Final in-bed target: <b>${fmt(toMin(final))}</b>. Enter when you actually fall asleep now.<br><b>Note:</b> Tier 1 cues (shower 10 PM, lights 10:30 PM, router/CT 11 PM, Screen Time 11:30 PM) start tonight regardless.</p><div class="row"><label>Current sleep onset</label><input type="time" id="calibInput" value="00:45"><button class="primary" onclick="submitCalibration()">Start ramp</button><button onclick="skipRamp()">Skip</button></div><div class="tiny" style="margin-top:8px;">Advances 15 min/week at ≥80% adherence.</div></div>`;
+    container.innerHTML=`<div class="ramp-calibration"><h3>⏱ Set up your bedtime ramp</h3><p>Final in-bed target: <b>${fmt(toMin(final))}</b>. Enter when you actually fall asleep now.<br><b>Note:</b> Tier 1 cues (shower 10 PM, lights 10:30 PM, full digital blockade 10:30 PM) start tonight regardless.</p><div class="row"><label>Current sleep onset</label><input type="time" id="calibInput" value="00:45"><button class="primary" onclick="submitCalibration()">Start ramp</button><button onclick="skipRamp()">Skip</button></div><div class="tiny" style="margin-top:8px;">Advances 15 min/week at ≥80% adherence.</div></div>`;
     return;
   }
   const active=activeSleepTarget(),final=finalSleepHhmm();
@@ -992,7 +991,7 @@ function renderRamp() {
     else statusHtml=`<div class="ramp-status hold">⚠ <b>Holding at ${fmtR(toMin(active))}.</b> Adherence: <b>${rateStr}</b> (need ≥80%) · Debt: ${pill}</div>`;
   }
   const np=hhmmFromMin(fromSignedSleep(Math.max(toSignedSleep(active)-RAMP_STEP_MIN,toSignedSleep(final))));
-  container.innerHTML=`<div class="ramp-card"><div class="ramp-header"><span class="ramp-title">⏱ Bedtime ramp</span><span class="ramp-week">Week ${calWeek+1} · day ${daysElapsed%7+1}/7</span></div><div class="ramp-target">In-bed: ${fmtR(toMin(active))}</div><div class="ramp-final">Final: ${fmtR(toMin(final))}${isDone?'':' · Next: '+fmtR(toMin(np))}</div>${total>0?`<div class="ramp-progress">${stepsHtml}</div>`:''}<div class="ramp-tier1">📌 Tier 1 cues every night: Shower 10 PM · Lights 10:30 PM · Router+CT 11 PM · Screen Time 11:30 PM</div>${statusHtml}</div>`;
+  container.innerHTML=`<div class="ramp-card"><div class="ramp-header"><span class="ramp-title">⏱ Bedtime ramp</span><span class="ramp-week">Week ${calWeek+1} · day ${daysElapsed%7+1}/7</span></div><div class="ramp-target">In-bed: ${fmtR(toMin(active))}</div><div class="ramp-final">Final: ${fmtR(toMin(final))}${isDone?'':' · Next: '+fmtR(toMin(np))}</div>${total>0?`<div class="ramp-progress">${stepsHtml}</div>`:''}<div class="ramp-tier1">📌 Tier 1 cues every night: Shower 10 PM · Lights 10:30 PM · Full digital blockade 10:30 PM</div>${statusHtml}</div>`;
 }
 
 // ── Render: derived ───────────────────────────────────────────────────────────
@@ -1208,6 +1207,40 @@ function renderAlert() {
   box.innerHTML=html;
 }
 
+function renderMorningStatus() {
+  const y = yesterday();
+  const d = state.data[y] || {};
+
+  // Last Night logged status
+  const statusEl = document.getElementById('lastNightStatus');
+  if (statusEl) {
+    if (d.status) {
+      const labels = { yes:'✓ Logged: Followed protocol', social:'● Logged: Social exception', no:'✕ Logged: Missed' };
+      const colors = { yes:'#1b5e20', social:'#6d4c00', no:'#b71c1c' };
+      statusEl.textContent = (labels[d.status] || '') + ' · tap to change';
+      statusEl.style.color = colors[d.status] || '#555';
+    } else {
+      statusEl.textContent = '';
+    }
+  }
+
+  // Pre-fill Oura inputs with saved values if they exist
+  const ouraFields = [['ouraScoreIn','ouraScore'],['ouraEffIn','ouraEff'],['ouraLatIn','ouraLat']];
+  for (const [id, key] of ouraFields) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (d[key] !== undefined) { el.value = d[key]; el.style.outline = '2px solid #a5d6a7'; el.style.outlineOffset = '1px'; }
+    else { if (!el.matches(':focus')) { el.value = ''; } el.style.outline = ''; el.style.outlineOffset = ''; }
+  }
+
+  // Pre-fill Whoop debt input with saved value if it exists
+  const gapEl = document.getElementById('gapIn');
+  if (gapEl) {
+    if (d.gap !== undefined) { gapEl.value = d.gap; gapEl.style.outline = '2px solid #a5d6a7'; gapEl.style.outlineOffset = '1px'; }
+    else { if (!gapEl.matches(':focus')) { gapEl.value = ''; } gapEl.style.outline = ''; gapEl.style.outlineOffset = ''; }
+  }
+}
+
 function renderAll() {
   renderEmergencyBanner();
   renderHealthPanel();
@@ -1215,6 +1248,7 @@ function renderAll() {
   renderDerived();renderModeExplain();renderLifestyleToggles();renderAlert();
   renderTimeline();renderScorecard();renderStats();renderTrend();
   renderHmWeekdays();renderHeatmap();renderWeekdays();renderGrid();renderLevers();
+  renderMorningStatus();
 }
 
 // ── Interactions ──────────────────────────────────────────────────────────────
@@ -1229,7 +1263,6 @@ function saveOuraDaily(){
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
   saveState(state);renderAll();
-  fields.forEach(([id])=>document.getElementById(id).value='');
   const flash=document.getElementById('saveFlashOura');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
 }
 function saveWhoopDaily(){
@@ -1239,7 +1272,6 @@ function saveWhoopDaily(){
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
   saveState(state);renderAll();
-  fields.forEach(([id])=>document.getElementById(id).value='');
   const flash=document.getElementById('saveFlashDaily');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
 }
 function saveWhoopWeekly(){
