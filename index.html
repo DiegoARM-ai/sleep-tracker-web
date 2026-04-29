@@ -302,6 +302,7 @@ button.valve-btn:hover { background: #e1bee7; }
 <!-- MORNING VIEW -->
 <div id="morningView">
   <div id="emergencyBanner"></div>
+  <div id="sleepInCard"></div>
   <div id="healthPanel"></div>
   <div id="rampContainer"></div>
 
@@ -586,7 +587,8 @@ const DEFAULTS = {
   settings: { wake:'09:00', mode:'ET', viewOverride:null, sleepNeedMin:DEFAULT_SLEEP_NEED_MIN, sleepNeedUpdatedAt:null, efficiencyPct:DEFAULT_EFFICIENCY_PCT, lifestyle:{caffeine:false,alcohol:false} },
   data:{}, valves:{}, ramp:null,
   health:{ checks:{}, lastChecked:null, dismissed:false },
-  emergency:{ active:false, manualOverride:null }
+  emergency:{ active:false, manualOverride:null },
+  sleepIn:{ date:null, adjustment:0, lastUsed:null, dismissed:null }
 };
 const STORAGE_KEY = 'somnus_state_v1';
 function parseAndMerge(decoded) {
@@ -600,6 +602,7 @@ function parseAndMerge(decoded) {
   if (typeof merged.ramp==='undefined') merged.ramp = null;
   merged.health = Object.assign({checks:{},lastChecked:null,dismissed:false}, merged.health||{});
   merged.emergency = Object.assign({active:false,manualOverride:null}, merged.emergency||{});
+  merged.sleepIn = Object.assign({date:null,adjustment:0,lastUsed:null,dismissed:null}, merged.sleepIn||{});
   Object.keys(merged.data).forEach(iso => {
     const e = merged.data[iso];
     if (e&&e.lever&&!e.levers) { e.levers=[normalizeLeverKey(e.lever)]; delete e.lever; }
@@ -1264,6 +1267,108 @@ function renderAlert() {
   box.innerHTML=html;
 }
 
+// ── Sleep In ──────────────────────────────────────────────────────────────────
+function isSleepInActive() {
+  return !!(state.sleepIn && state.sleepIn.date === today() && state.sleepIn.adjustment > 0);
+}
+function sleepInCapHit() {
+  if (!state.sleepIn || !state.sleepIn.lastUsed || state.sleepIn.lastUsed === today()) return false;
+  return daysBetween(state.sleepIn.lastUsed, today()) < 7;
+}
+function activateSleepIn(adj) {
+  state.sleepIn.date = today();
+  state.sleepIn.adjustment = adj;
+  state.sleepIn.lastUsed = today();
+  state.sleepIn.dismissed = null;
+  saveState(state); renderAll();
+}
+function undoSleepIn() {
+  state.sleepIn.date = null;
+  state.sleepIn.adjustment = 0;
+  saveState(state); renderAll();
+}
+function dismissSleepInCard() {
+  state.sleepIn.dismissed = today();
+  saveState(state); renderAll();
+}
+function renderSleepIn() {
+  const container = document.getElementById('sleepInCard');
+  if (!container) return;
+
+  // Auto-clear adjustment if it's from a previous day
+  if (state.sleepIn.date && state.sleepIn.date !== today()) {
+    state.sleepIn.date = null;
+    state.sleepIn.adjustment = 0;
+    saveState(state);
+  }
+
+  const hour = new Date().getHours();
+  const lastNight = state.data[yesterday()] || {};
+  const wasSocialOrMissed = lastNight.status === 'social' || lastNight.status === 'no';
+  const dismissedToday = state.sleepIn.dismissed === today();
+  const shouldShow = isSleepInActive() || (!dismissedToday && (hour < 11 || wasSocialOrMissed));
+  if (!shouldShow) { container.innerHTML = ''; return; }
+
+  const baseWakeMin = toMin(state.settings.wake);
+  const debt = typeof lastNight.gap === 'number' ? lastNight.gap : null;
+  const can60 = debt !== null && debt >= 60;
+
+  // ── Already activated — show confirmation + checklist ──
+  if (isSleepInActive()) {
+    const newWakeMin = (baseWakeMin + state.sleepIn.adjustment) % 1440;
+    const hueStartMin = (newWakeMin - 15 + 1440) % 1440;
+    container.innerHTML = `
+      <div class="alert success" style="margin-bottom:16px;">
+        <b>✓ Sleeping in to ${fmt(newWakeMin)} — resets tomorrow.</b>
+        <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,0.7);border-radius:8px;font-size:12px;line-height:2.1;">
+          <b>Do these now:</b><br>
+          1 · Set alarm → <b>${fmt(newWakeMin)}</b><br>
+          2 · Hue app → Wake Up automation → start time → <b>${fmt(hueStartMin)}</b>
+        </div>
+        <button onclick="undoSleepIn()" style="margin-top:10px;padding:6px 12px;font-size:12px;min-height:32px;">Undo</button>
+      </div>`;
+    return;
+  }
+
+  // ── 7-day cap hit ──
+  if (sleepInCapHit()) {
+    const daysAgoN = daysBetween(state.sleepIn.lastUsed, today());
+    const daysLeft = 7 - daysAgoN;
+    if (wasSocialOrMissed) {
+      container.innerHTML = `
+        <div class="alert" style="margin-bottom:16px;">
+          <b>Sleep In — not available.</b> Used ${daysAgoN === 1 ? 'yesterday' : daysAgoN + ' days ago'} · available again in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.<br>
+          <span style="font-size:11px;color:#888;margin-top:4px;display:block;">Sleeping in more than once per 7 days compounds social jetlag. Keep your ${fmt(baseWakeMin)} anchor today.</span>
+        </div>`;
+    } else {
+      container.innerHTML = '';
+    }
+    return;
+  }
+
+  // ── Available — show options ──
+  const contextNote = wasSocialOrMissed
+    ? `Last night was a ${lastNight.status === 'social' ? 'social exception' : 'miss'}. Anchor is <b>${fmt(baseWakeMin)}</b> — here's what the science allows.`
+    : `Wake anchor: <b>${fmt(baseWakeMin)}</b>. A one-time 30-min shift has negligible circadian cost.`;
+  const debtNote = can60
+    ? `<span style="color:#1b5e20;font-size:11px;">Whoop debt ${debt}m ≥ 60 — +60 min unlocked</span>`
+    : debt !== null
+      ? `<span style="color:#aaa;font-size:11px;">Debt ${debt}m — need ≥ 60 min to unlock +60 min option</span>`
+      : `<span style="color:#aaa;font-size:11px;">Log Whoop debt this morning to unlock +60 min</span>`;
+  container.innerHTML = `
+    <div class="alert info" style="margin-bottom:16px;">
+      <b>😴 Sleep in this morning?</b>
+      <div style="font-size:12px;color:#555;margin:6px 0 10px;">${contextNote}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="primary" onclick="activateSleepIn(30)" style="padding:8px 16px;font-size:12px;min-height:36px;">+30 min → ${fmt(baseWakeMin+30)} ✓</button>
+        <button onclick="activateSleepIn(60)" ${can60?'':'disabled'} style="padding:8px 16px;font-size:12px;min-height:36px;${can60?'':'opacity:0.4;cursor:not-allowed;'}">+60 min → ${fmt(baseWakeMin+60)}</button>
+        <button onclick="dismissSleepInCard()" style="padding:8px 16px;font-size:12px;min-height:36px;">Keep ${fmt(baseWakeMin)}</button>
+      </div>
+      <div style="margin-top:8px;">${debtNote}</div>
+      <div style="font-size:10px;color:#aaa;margin-top:6px;">Once per 7 days · resets automatically tomorrow</div>
+    </div>`;
+}
+
 function renderMorningStatus() {
   const y = yesterday();
   const d = state.data[y] || {};
@@ -1307,6 +1412,7 @@ function renderMorningStatus() {
 
 function renderAll() {
   renderEmergencyBanner();
+  renderSleepIn();
   renderHealthPanel();
   renderRamp();
   renderDerived();renderModeExplain();renderLifestyleToggles();renderAlert();
