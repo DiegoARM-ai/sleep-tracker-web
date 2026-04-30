@@ -1353,7 +1353,8 @@ function renderSleepIn() {
   const lastNight = state.data[yesterday()] || {};
   const wasSocialOrMissed = lastNight.status === 'social' || lastNight.status === 'no';
   const dismissedToday = state.sleepIn.dismissed === today();
-  const shouldShow = isSleepInActive() || (!dismissedToday && (hour < 11 || wasSocialOrMissed));
+  // Only show when there's still time to act: late night (≥22) or very early morning (<7)
+  const shouldShow = isSleepInActive() || (!dismissedToday && (hour < 7 || hour >= 22));
   if (!shouldShow) { container.innerHTML = ''; return; }
 
   const baseWakeMin = toMin(state.settings.wake);
