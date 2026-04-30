@@ -202,6 +202,12 @@ button.valve-btn:hover { background: #e1bee7; }
 .save-flash.on { opacity: 1; }
 .lever-picker { margin-top: 10px; padding: 14px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; }
 .lever-picker.hidden { display: none; }
+.social-lever-picker { margin-top: 10px; padding: 14px; background: #f3e5f5; border: 1px solid #ce93d8; border-radius: 8px; }
+.social-lever-picker.hidden { display: none; }
+.social-lever-picker .lever-picker-title { color: #4a148c; }
+.social-lever-picker .lever-check:hover { border-color: #ce93d8; background: #fce4ec; }
+.social-lever-picker .lever-check.checked { border-color: #7b1fa2; background: #f3e5f5; }
+.social-lever-picker .lever-check input[type="checkbox"] { accent-color: #7b1fa2; }
 .lever-picker-title { font-size: 13px; font-weight: 600; color: #5d4037; margin-bottom: 10px; }
 .lever-picker-title span { font-weight: 400; color: #888; font-size: 11px; margin-left: 4px; }
 .lever-checks { display: flex; flex-direction: column; gap: 8px; }
@@ -331,6 +337,14 @@ button.valve-btn:hover { background: #e1bee7; }
     <div class="lever-picker-actions">
       <button class="primary" onclick="saveLeverPick()">Save</button>
       <button onclick="cancelLeverPick()">Skip</button>
+    </div>
+  </div>
+  <div id="socialLeverPickerBox" class="social-lever-picker hidden">
+    <div class="lever-picker-title">🌙 How did the social night go? <span>Pick all that apply</span></div>
+    <div class="lever-checks" id="socialLeverChecks"></div>
+    <div class="lever-picker-actions">
+      <button class="primary" onclick="saveSocialLeverPick()">Save</button>
+      <button onclick="cancelSocialLeverPick()">Skip</button>
     </div>
   </div>
 
@@ -569,6 +583,13 @@ const LEVERS = [
 const LEVER_SHORT = { anchor:'Wake+Light', thermo:'Wind-down', blockade:'Blockade', physio:'Physiology', stim:'Bed=Sleep' };
 function normalizeLeverKey(k) { return k==='inev'?'blockade':k; }
 
+const SOCIAL_LEVERS = [
+  { key:'date_late',    name:'Late start',         note:'Date started after 9pm — pushed bedtime past 1am' },
+  { key:'phone_after',  name:'Phone after date',   note:'Scrolled phone after getting home instead of winding down' },
+  { key:'out_venue',    name:'Out at venue',        note:'Bar, restaurant, or event — harder to decompress vs. home date' },
+  { key:'no_winddown',  name:'No wind-down buffer', note:'Went straight to bed, no decompression time' },
+];
+
 // ── Sleep need utils ──────────────────────────────────────────────────────────
 function parseNeedHhmm(str) {
   if (!str) return null;
@@ -630,6 +651,7 @@ function loadState() {
 function saveState(s) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch(e){} }
 let state = loadState();
 let pendingLeverDate = null;
+let pendingSocialLeverDate = null;
 
 // ── Date/time utils ───────────────────────────────────────────────────────────
 function ymd(d) { return d.toISOString().slice(0,10); }
@@ -959,6 +981,31 @@ function saveLeverPick(){
   pendingLeverDate=null; document.getElementById('leverPickerBox').classList.add('hidden'); saveState(state);renderAll();
 }
 function cancelLeverPick(){ pendingLeverDate=null; document.getElementById('leverPickerBox').classList.add('hidden'); }
+
+// ── Social lever picker ───────────────────────────────────────────────────────
+function buildSocialLeverPickerHTML() {
+  return SOCIAL_LEVERS.map(lv =>
+    `<label class="lever-check" id="slc-${lv.key}" onclick="toggleSocialLeverCheck('${lv.key}')"><input type="checkbox" id="scb-${lv.key}" onclick="event.stopPropagation()" onchange="syncSocialLeverCheck('${lv.key}')"><span class="lever-check-label"><b>${lv.name}</b><div class="lever-check-note">${lv.note}</div></span></label>`
+  ).join('');
+}
+function toggleSocialLeverCheck(key){ const cb=document.getElementById('scb-'+key);cb.checked=!cb.checked;syncSocialLeverCheck(key); }
+function syncSocialLeverCheck(key){ const cb=document.getElementById('scb-'+key),row=document.getElementById('slc-'+key); if(cb.checked)row.classList.add('checked');else row.classList.remove('checked'); }
+function showSocialLeverPicker(iso){
+  pendingSocialLeverDate=iso;
+  const box=document.getElementById('socialLeverPickerBox'); if(!box)return;
+  document.getElementById('socialLeverChecks').innerHTML=buildSocialLeverPickerHTML();
+  SOCIAL_LEVERS.forEach(lv=>{ const cb=document.getElementById('scb-'+lv.key);if(cb)cb.checked=false; const row=document.getElementById('slc-'+lv.key);if(row)row.classList.remove('checked'); });
+  const existing=(state.data[iso]&&state.data[iso].socialLevers)||[];
+  existing.forEach(k=>{ const cb=document.getElementById('scb-'+k);if(cb)cb.checked=true; const row=document.getElementById('slc-'+k);if(row)row.classList.add('checked'); });
+  box.classList.remove('hidden');
+  box.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function saveSocialLeverPick(){
+  const selected=SOCIAL_LEVERS.map(lv=>lv.key).filter(k=>{ const cb=document.getElementById('scb-'+k);return cb&&cb.checked; });
+  if(pendingSocialLeverDate){ state.data[pendingSocialLeverDate]=state.data[pendingSocialLeverDate]||{status:'social'}; state.data[pendingSocialLeverDate].socialLevers=selected.length?selected:undefined; if(!selected.length)delete state.data[pendingSocialLeverDate].socialLevers; }
+  pendingSocialLeverDate=null; document.getElementById('socialLeverPickerBox').classList.add('hidden'); saveState(state);renderAll();
+}
+function cancelSocialLeverPick(){ pendingSocialLeverDate=null; document.getElementById('socialLeverPickerBox').classList.add('hidden'); }
 
 // ── Render: emergency banner ──────────────────────────────────────────────────
 function renderEmergencyBanner() {
@@ -1422,9 +1469,9 @@ function renderAll() {
 }
 
 // ── Interactions ──────────────────────────────────────────────────────────────
-function cycleDay(iso){ const cur=state.data[iso]&&state.data[iso].status;const next=cur==='yes'?'social':cur==='social'?'no':cur==='no'?undefined:'yes';if(next===undefined)delete state.data[iso];else{state.data[iso]=state.data[iso]||{};state.data[iso].status=next;delete state.data[iso].auto;if(next==='no')showLeverPicker(iso);}saveState(state);renderAll(); }
-function logLastNight(status){ const iso=yesterday();state.data[iso]=state.data[iso]||{};state.data[iso].status=status;delete state.data[iso].auto;if(status==='no')showLeverPicker(iso);saveState(state);renderAll(); }
-function correctAutofill(status){ const y=yesterday();state.data[y]=state.data[y]||{};state.data[y].status=status;delete state.data[y].auto;if(status==='no')showLeverPicker(y);saveState(state);renderAll(); }
+function cycleDay(iso){ const cur=state.data[iso]&&state.data[iso].status;const next=cur==='yes'?'social':cur==='social'?'no':cur==='no'?undefined:'yes';if(next===undefined)delete state.data[iso];else{state.data[iso]=state.data[iso]||{};state.data[iso].status=next;delete state.data[iso].auto;if(next==='no')showLeverPicker(iso);else if(next==='social')showSocialLeverPicker(iso);}saveState(state);renderAll(); }
+function logLastNight(status){ const iso=yesterday();state.data[iso]=state.data[iso]||{};state.data[iso].status=status;delete state.data[iso].auto;if(status==='no')showLeverPicker(iso);else if(status==='social')showSocialLeverPicker(iso);saveState(state);renderAll(); }
+function correctAutofill(status){ const y=yesterday();state.data[y]=state.data[y]||{};state.data[y].status=status;delete state.data[y].auto;if(status==='no')showLeverPicker(y);else if(status==='social')showSocialLeverPicker(y);saveState(state);renderAll(); }
 function dismissAutofill(){ clearAutofillFlag(yesterday());renderAll(); }
 function saveOuraDaily(){
   const iso=yesterday();
