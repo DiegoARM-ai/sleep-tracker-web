@@ -702,7 +702,10 @@ let pendingSocialLeverDate = null;
 let pendingSocialType = 'routine';
 
 // ── Date/time utils ───────────────────────────────────────────────────────────
-function ymd(d) { return d.toISOString().slice(0,10); }
+// ymd() uses LOCAL calendar date (not UTC) so the app doesn't flip to the next
+// day at 7–8pm for US timezones. toISOString() is UTC and caused off-by-one
+// errors at night (e.g. 7:48pm CDT = 00:48 UTC = "tomorrow" in UTC).
+function ymd(d) { return d.getFullYear()+'-'+(d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0'); }
 function today() { return ymd(new Date()); }
 function yesterday() { const d=new Date(); d.setDate(d.getDate()-1); return ymd(d); }
 function daysAgo(n) { const d=new Date(); d.setDate(d.getDate()-n); return ymd(d); }
@@ -1641,10 +1644,13 @@ async function fetchOuraData(){
   const token=state.settings.ouraToken;
   if(!token) return{error:'no_token'};
   const headers={'Authorization':'Bearer '+token};
-  // daily_sleep uses wake date (today); sleep sessions may be indexed by start
-  // date (yesterday) — use a 2-day window to catch either convention.
-  const scoreParams='?start_date='+today()+'&end_date='+today();
-  const sleepParams='?start_date='+yesterday()+'&end_date='+today();
+  // Use a 3-day window for sleep sessions: Oura tags early-morning sleep
+  // (e.g. 4:44am) with the *previous* calendar day, so a 2-day window misses
+  // it when querying from yesterday. 3 days is wide enough to always catch
+  // last night regardless of when you went to bed.
+  // daily_sleep: 2-day window + pick most recent, for the same reason.
+  const scoreParams='?start_date='+yesterday()+'&end_date='+today();
+  const sleepParams='?start_date='+daysAgo(2)+'&end_date='+today();
   try{
     const [scoreRes,sleepRes]=await Promise.all([
       fetch(OURA_PROXY+'/v2/usercollection/daily_sleep'+scoreParams,{headers}),
@@ -1654,8 +1660,9 @@ async function fetchOuraData(){
     if(!scoreRes.ok||!sleepRes.ok) return{error:'api_error'};
     const [scoreData,sleepData]=await Promise.all([scoreRes.json(),sleepRes.json()]);
 
-    // Daily sleep score (one entry per day, wake date)
-    const daily=scoreData.data&&scoreData.data[0];
+    // Daily sleep score — pick the most recent day's record (sort desc by day)
+    const dailyAll=(scoreData.data||[]).sort((a,b)=>b.day>a.day?1:-1);
+    const daily=dailyAll[0]||null;
     const score=(daily&&typeof daily.score==='number')?daily.score:null;
 
     // Main overnight session: pick the most recent bedtime_start among sessions
