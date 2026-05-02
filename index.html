@@ -1625,6 +1625,10 @@ function saveOuraToken(){
   if(v) syncOuraDaily(true); // immediately attempt sync with new token
 }
 
+// Cloudflare Worker proxy URL — routes browser→Oura requests around CORS restrictions.
+// Update this after deploying oura-worker.js to Cloudflare Workers.
+const OURA_PROXY = 'https://somnus-oura.ruisd21.workers.dev';
+
 async function fetchOuraData(){
   const token=state.settings.ouraToken;
   if(!token) return{error:'no_token'};
@@ -1635,8 +1639,8 @@ async function fetchOuraData(){
   const params='?start_date='+dateStr+'&end_date='+dateStr;
   try{
     const [scoreRes,sleepRes]=await Promise.all([
-      fetch('https://api.ouraring.com/v2/usercollection/daily_sleep'+params,{headers}),
-      fetch('https://api.ouraring.com/v2/usercollection/sleep'+params,{headers})
+      fetch(OURA_PROXY+'/v2/usercollection/daily_sleep'+params,{headers}),
+      fetch(OURA_PROXY+'/v2/usercollection/sleep'+params,{headers})
     ]);
     if(scoreRes.status===401||sleepRes.status===401) return{error:'unauthorized'};
     if(!scoreRes.ok||!sleepRes.ok) return{error:'api_error'};
