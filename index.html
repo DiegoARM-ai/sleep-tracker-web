@@ -407,16 +407,16 @@ button.valve-btn:hover { background: #e1bee7; }
     </div>
   </div>
 
-  <div class="section-h" style="margin-top:16px;">Whoop — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">sleep debt only</span></div>
+  <div class="section-h" style="margin-top:16px;">Sleep debt <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">auto-filled from Oura · override from Whoop if needed</span></div>
   <div class="card" style="padding:14px;">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="whoop-field">
         <label>Sleep debt (min)</label>
-        <input type="number" id="gapIn" placeholder="e.g. 45" min="0" max="360" style="width:100%">
-        <div class="hint">Whoop → <b>Sleep</b> → "Sleep Debt" at top. Target &lt;30 min.</div>
+        <input type="number" id="gapIn" placeholder="auto" min="0" max="360" style="width:100%">
+        <div class="hint">Auto: sleep need − Oura actual. Override: Whoop → <b>Sleep</b> → "Sleep Debt". Target &lt;30 min.</div>
       </div>
       <div style="display:flex;align-items:flex-end;padding-bottom:2px;">
-        <div class="hint" style="color:#aaa;font-size:11px;line-height:1.5;">Used to detect emergency recovery mode and flag the ramp. HRV &amp; RHR are in Settings below.</div>
+        <div class="hint" style="color:#aaa;font-size:11px;line-height:1.5;">Drives emergency recovery mode and ramp flag. HRV &amp; RHR stay in Settings below.</div>
       </div>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1633,31 +1633,37 @@ async function fetchOuraData(){
   const token=state.settings.ouraToken;
   if(!token) return{error:'no_token'};
   const headers={'Authorization':'Bearer '+token};
-  // Oura attributes a sleep session to the day you wake up, which from Somnus's
-  // perspective is today() (we're logging "last night" in the morning view).
-  const dateStr=today();
-  const params='?start_date='+dateStr+'&end_date='+dateStr;
+  // daily_sleep uses wake date (today); sleep sessions may be indexed by start
+  // date (yesterday) — use a 2-day window to catch either convention.
+  const scoreParams='?start_date='+today()+'&end_date='+today();
+  const sleepParams='?start_date='+yesterday()+'&end_date='+today();
   try{
     const [scoreRes,sleepRes]=await Promise.all([
-      fetch(OURA_PROXY+'/v2/usercollection/daily_sleep'+params,{headers}),
-      fetch(OURA_PROXY+'/v2/usercollection/sleep'+params,{headers})
+      fetch(OURA_PROXY+'/v2/usercollection/daily_sleep'+scoreParams,{headers}),
+      fetch(OURA_PROXY+'/v2/usercollection/sleep'+sleepParams,{headers})
     ]);
     if(scoreRes.status===401||sleepRes.status===401) return{error:'unauthorized'};
     if(!scoreRes.ok||!sleepRes.ok) return{error:'api_error'};
     const [scoreData,sleepData]=await Promise.all([scoreRes.json(),sleepRes.json()]);
 
-    // Daily sleep score (one entry per day)
+    // Daily sleep score (one entry per day, wake date)
     const daily=scoreData.data&&scoreData.data[0];
     const score=(daily&&typeof daily.score==='number')?daily.score:null;
 
-    // Main overnight session — type:'long_sleep', pick longest if multiple
-    const sessions=(sleepData.data||[]).filter(s=>s.type==='long_sleep');
-    const main=sessions.sort((a,b)=>(b.total_sleep_duration||0)-(a.total_sleep_duration||0))[0]||null;
+    // Main overnight session: exclude short sessions (<3h), take longest.
+    // Avoids relying on 'type' field which varies across Oura API versions.
+    const all=sleepData.data||[];
+    const meaningful=all.filter(s=>(s.total_sleep_duration||0)>3*3600);
+    const pool=meaningful.length>0?meaningful:all;
+    const main=pool.sort((a,b)=>(b.total_sleep_duration||0)-(a.total_sleep_duration||0))[0]||null;
     const efficiency=(main&&typeof main.efficiency==='number')?main.efficiency:null;
     const latencyMin=(main&&typeof main.latency==='number')?Math.round(main.latency/60):null;
+    const totalSleepMin=(main&&typeof main.total_sleep_duration==='number')?Math.round(main.total_sleep_duration/60):null;
+    // bedtime_start is ISO timestamp — extract HH:MM in local time for in-bed field
+    const inBedTime=(main&&main.bedtime_start)?new Date(main.bedtime_start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}):null;
 
     if(score===null&&efficiency===null&&latencyMin===null) return{error:'no_data'};
-    return{score,efficiency,latencyMin,ok:true};
+    return{score,efficiency,latencyMin,totalSleepMin,inBedTime,ok:true};
   }catch(e){
     return{error:'network_error'};
   }
@@ -1677,6 +1683,13 @@ async function syncOuraDaily(manual){
   if(result.score!==null)      state.data[iso].ouraScore=result.score;
   if(result.efficiency!==null) state.data[iso].ouraEff=result.efficiency;
   if(result.latencyMin!==null) state.data[iso].ouraLat=result.latencyMin;
+  if(result.inBedTime)         state.data[iso].inBedTime=result.inBedTime;
+  // Sleep debt: nightly deficit (sleep need − actual sleep). The app 7-day-averages
+  // this, so single-night variance smooths out the same way Whoop's rolling debt does.
+  if(result.totalSleepMin!==null){
+    const need=state.settings.sleepNeedMin||DEFAULT_SLEEP_NEED_MIN;
+    state.data[iso].gap=Math.max(0,need-result.totalSleepMin);
+  }
   state.data[iso].ouraSyncedAt=new Date().toISOString();
   state.data[iso].ouraSource='api';
   saveState(state);
