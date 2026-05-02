@@ -1578,8 +1578,9 @@ function renderOuraSyncBar(transient){
   }
   if(entry.ouraSyncedAt&&entry.ouraSource==='api'){
     const t=new Date(entry.ouraSyncedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const dbg=entry.ouraSessionDebug?' · session: '+entry.ouraSessionDebug:'';
     bar.className='oura-sync-bar synced';
-    bar.innerHTML='<span class="oura-sync-badge api">Oura API</span><span style="flex:1;margin-left:4px;">Auto-filled at '+t+'</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Re-sync</button>';
+    bar.innerHTML='<span class="oura-sync-badge api">Oura API</span><span style="flex:1;margin-left:4px;">Synced at '+t+dbg+'</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Re-sync</button>';
     return;
   }
   // Token set, manual data or no sync yet
@@ -1672,7 +1673,9 @@ async function fetchOuraData(){
     const inBedTime=(main&&main.bedtime_start)?new Date(main.bedtime_start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}):null;
 
     if(score===null&&efficiency===null&&latencyMin===null) return{error:'no_data'};
-    return{score,efficiency,latencyMin,totalSleepMin,inBedTime,ok:true};
+    // sessionDebug: shown in sync bar so you can verify the right session was found
+    const sessionDebug=main?('bed '+(main.bedtime_start?new Date(main.bedtime_start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false}):'?')+(totalSleepMin?' · '+Math.floor(totalSleepMin/60)+'h'+(totalSleepMin%60+'').padStart(2,'0')+'m':'')):null;
+    return{score,efficiency,latencyMin,totalSleepMin,inBedTime,sessionDebug,ok:true};
   }catch(e){
     return{error:'network_error'};
   }
@@ -1686,6 +1689,18 @@ async function syncOuraDaily(manual){
   // Skip auto-sync if already synced today (avoid hitting API on every render)
   if(!manual&&entry.ouraSyncedAt&&entry.ouraSyncedAt.slice(0,10)===today()) return;
   renderOuraSyncBar('syncing');
+  // On manual re-sync, wipe stale oura-derived fields BEFORE writing.
+  // Without this, old hand-entered values from earlier in the week persist
+  // whenever the API returns null for a field (e.g. Oura still processing).
+  if(manual){
+    state.data[iso]=state.data[iso]||{};
+    delete state.data[iso].ouraScore;
+    delete state.data[iso].ouraEff;
+    delete state.data[iso].ouraLat;
+    delete state.data[iso].inBedTime;
+    delete state.data[iso].gap;
+    delete state.data[iso].ouraSessionDebug;
+  }
   const result=await fetchOuraData();
   if(!result.ok){renderOuraSyncBar(result.error);return;}
   state.data[iso]=state.data[iso]||{};
@@ -1693,6 +1708,7 @@ async function syncOuraDaily(manual){
   if(result.efficiency!==null) state.data[iso].ouraEff=result.efficiency;
   if(result.latencyMin!==null) state.data[iso].ouraLat=result.latencyMin;
   if(result.inBedTime)         state.data[iso].inBedTime=result.inBedTime;
+  if(result.sessionDebug)      state.data[iso].ouraSessionDebug=result.sessionDebug;
   // Sleep debt: nightly deficit (sleep need − actual sleep). The app 7-day-averages
   // this, so single-night variance smooths out the same way Whoop's rolling debt does.
   if(result.totalSleepMin!==null){
