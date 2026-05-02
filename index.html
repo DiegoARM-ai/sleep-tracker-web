@@ -599,6 +599,7 @@ const RAMP_MIN_DATA = 5;
 const DEFAULT_SLEEP_NEED_MIN = 555;
 const DEFAULT_EFFICIENCY_PCT = 87.5;
 const NEED_STALE_DAYS = 8;
+const WHOOP_WEEKLY_STALE_DAYS = 8; // alert if HRV/RHR not updated in 8 days
 const DEBT_TARGET_MIN = 30;
 const DEBT_CAUTION_MIN = 60;
 const EMERGENCY_DEBT_MIN = 90;
@@ -651,7 +652,7 @@ function needToHhmm(min) { return Math.floor(min/60)+':'+String(min%60).padStart
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const DEFAULTS = {
-  settings: { wake:'09:00', mode:'ET', viewOverride:null, sleepNeedMin:DEFAULT_SLEEP_NEED_MIN, sleepNeedUpdatedAt:null, efficiencyPct:DEFAULT_EFFICIENCY_PCT, lifestyle:{caffeine:false,alcohol:false}, ouraToken:null },
+  settings: { wake:'09:00', mode:'ET', viewOverride:null, sleepNeedMin:DEFAULT_SLEEP_NEED_MIN, sleepNeedUpdatedAt:null, efficiencyPct:DEFAULT_EFFICIENCY_PCT, lifestyle:{caffeine:false,alcohol:false}, ouraToken:null, whoopWeeklyUpdatedAt:null },
   data:{}, valves:{}, ramp:null,
   health:{ checks:{}, lastChecked:null, dismissed:false },
   emergency:{ active:false, manualOverride:null },
@@ -1358,6 +1359,12 @@ function renderAlert() {
   } else {
     html+=`<div class="alert info">📋 <b>Set your sleep need in Settings</b> to calibrate targets. Default is 9h 15m.</div>`;
   }
+  // Whoop weekly HRV/RHR staleness alert
+  const whoopDays=state.settings.whoopWeeklyUpdatedAt?daysBetween(state.settings.whoopWeeklyUpdatedAt,today()):null;
+  if(whoopDays===null||whoopDays>=WHOOP_WEEKLY_STALE_DAYS){
+    const whoopAge=whoopDays!==null?whoopDays+' days old':'never logged';
+    html+=`<div class="alert info">💪 <b>Whoop weekly check due</b> — HRV &amp; RHR are ${whoopAge}. Open Whoop → Recovery → log in Settings below.</div>`;
+  }
   let valves=0; for(let i=1;i<=7;i++){const d=daysAgo(i);if(state.valves[d])valves+=state.valves[d];}
   if(valves>=3) html+=`<div class="alert">⚠ <b>${valves} pressure valves in 7 days.</b> Leading indicator of system decay.</div>`;
   let consNo=0;
@@ -1719,6 +1726,7 @@ function saveWhoopWeekly(){
   let changed=false;
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
+  state.settings.whoopWeeklyUpdatedAt=today(); // stamp so staleness alert resets
   saveState(state);renderAll();
   fields.forEach(([id])=>document.getElementById(id).value='');
   const flash=document.getElementById('saveFlash');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
