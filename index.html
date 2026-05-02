@@ -413,7 +413,7 @@ button.valve-btn:hover { background: #e1bee7; }
       <div class="whoop-field">
         <label>Sleep debt (min)</label>
         <input type="number" id="gapIn" placeholder="auto" min="0" max="360" style="width:100%">
-        <div class="hint">Auto: sleep need − Oura actual. Override: Whoop → <b>Sleep</b> → "Sleep Debt". Target &lt;30 min.</div>
+        <div class="hint">Auto: last night's nightly deficit (sleep need − Oura actual). Note: Oura shows a rolling multi-day debt — this tracks per-night. Override: Whoop → <b>Sleep</b> → "Sleep Debt".</div>
       </div>
       <div style="display:flex;align-items:flex-end;padding-bottom:2px;">
         <div class="hint" style="color:#aaa;font-size:11px;line-height:1.5;">Drives emergency recovery mode and ramp flag. HRV &amp; RHR stay in Settings below.</div>
@@ -1303,7 +1303,7 @@ function renderScorecard() {
   html += card(consistPct, 'Consistency', 'target ≥6/7 nights', consistCls, consistFix, '%');
   html += card(scoreAvg, 'Sleep score', 'target ≥85 · Oura', scoreCls, 'Check stress, alcohol, late eating.', '');
   html += card(effAvg, 'Efficiency', 'target ≥85% · Oura', effCls, 'Reduce time awake in bed.', '%');
-  html += card(debtAvg, 'Sleep debt', 'target <30 min · Whoop', debtCls, 'Get more time in bed.', 'm');
+  html += card(debtAvg, 'Nightly deficit', 'target <30 min · Oura', debtCls, 'Get more time in bed.', 'm');
   html += '</div>';
   area.innerHTML = html;
 }
@@ -1326,7 +1326,7 @@ function renderStats() {
   let html='<div class="stats">';
   html+=sc(rate+'%','7-day rate','target 80–90%',rate<70?'warn':rate>=90?'good':'');
   html+=sc(valves,'Valves 7d','leading indicator',valves>=3?'warn':'');
-  html+=sc(gapAvg!==null?gapAvg+'m':'—','Sleep debt 7d','Whoop · target <30 min',gapAvg!==null&&gapAvg>=EMERGENCY_DEBT_MIN?'warn':gapAvg!==null&&gapAvg>=30?'warn':'');
+  html+=sc(gapAvg!==null?gapAvg+'m':'—','Nightly deficit 7d','Oura · target <30 min',gapAvg!==null&&gapAvg>=EMERGENCY_DEBT_MIN?'warn':gapAvg!==null&&gapAvg>=30?'warn':'');
   html+=sc(rhrAvg!==null?rhrAvg:'—','Pre-bed RHR','Whoop · target <55 bpm',rhrAvg!==null&&rhrAvg>=55?'warn':'');
   html+='</div>';
   if(hrvAvg!==null||latAvg!==null){
@@ -1657,12 +1657,14 @@ async function fetchOuraData(){
     const daily=scoreData.data&&scoreData.data[0];
     const score=(daily&&typeof daily.score==='number')?daily.score:null;
 
-    // Main overnight session: exclude short sessions (<3h), take longest.
-    // Avoids relying on 'type' field which varies across Oura API versions.
+    // Main overnight session: pick the most recent bedtime_start among sessions
+    // longer than 3h. Oura's sleep endpoint indexes by *wake* date, so a 2-day
+    // query window can return two nights; sorting by bedtime_start descending
+    // always lands on last night even when the previous night was longer.
     const all=sleepData.data||[];
     const meaningful=all.filter(s=>(s.total_sleep_duration||0)>3*3600);
     const pool=meaningful.length>0?meaningful:all;
-    const main=pool.sort((a,b)=>(b.total_sleep_duration||0)-(a.total_sleep_duration||0))[0]||null;
+    const main=pool.sort((a,b)=>new Date(b.bedtime_start||0)-new Date(a.bedtime_start||0))[0]||null;
     const efficiency=(main&&typeof main.efficiency==='number')?main.efficiency:null;
     const latencyMin=(main&&typeof main.latency==='number')?Math.round(main.latency/60):null;
     const totalSleepMin=(main&&typeof main.total_sleep_duration==='number')?Math.round(main.total_sleep_duration/60):null;
