@@ -265,6 +265,22 @@ button.valve-btn:hover { background: #e1bee7; }
 .lifestyle-toggle .toggle-dot { width: 14px; height: 14px; border-radius: 50%; background: #d8d4c8; flex-shrink: 0; }
 .lifestyle-toggle.on .toggle-dot { background: #43a047; }
 .lifestyle-hint { font-size: 11px; color: #aaa; margin-top: 6px; line-height: 1.5; }
+/* ── Social exception type selector ── */
+.social-type-selector { margin-bottom: 12px; }
+.social-type-label { font-size: 11px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.social-type-options { display: flex; gap: 8px; }
+.social-type-btn { flex: 1; padding: 10px 12px; border: 1.5px solid #d8d4c8; border-radius: 8px; background: white; cursor: pointer; font-size: 12px; font-weight: 600; color: #555; text-align: center; user-select: none; transition: all 0.12s; }
+.social-type-btn small { display: block; font-weight: 400; color: #aaa; font-size: 10px; margin-top: 3px; font-style: italic; }
+.social-type-btn:hover { background: #f5f3ee; }
+.social-type-btn.active[data-type="routine"] { border-color: #7b1fa2; background: #f3e5f5; color: #4a148c; }
+.social-type-btn.active[data-type="high_value"] { border-color: #1565c0; background: #e3f2fd; color: #0d47a1; }
+
+/* ── High-value social night visuals ── */
+.day.social.high-value { background: #e8eaf6; border-color: #7986cb; }
+.day.social.high-value .d-num { color: #1a237e; }
+.hm-cell.social.high-value { background: #7986cb; }
+.trend-bar.social.high-value { background: #7986cb; }
+
 @media (max-width: 560px) {
   .stats { grid-template-columns: repeat(2, 1fr); }
   .levers { grid-template-columns: repeat(3, 1fr); }
@@ -294,6 +310,14 @@ button.valve-btn:hover { background: #e1bee7; }
 .sc-card.sc-warn .sc-fix { background: #fff3e0; color: #bf360c; }
 .sc-bottleneck { font-size: 11px; font-weight: 600; color: #b71c1c; margin-bottom: 8px; padding: 7px 10px; background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; }
 .sc-ok-banner { font-size: 11px; color: #1b5e20; margin-bottom: 8px; padding: 7px 10px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 8px; }
+
+/* ── Oura sync bar ── */
+.oura-sync-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:8px 10px; background:#f5f3ee; border-radius:8px; font-size:12px; color:#555; flex-wrap:wrap; min-height:34px; }
+.oura-sync-bar.synced { background:#e8f5e9; border:1px solid #a5d6a7; }
+.oura-sync-bar.error  { background:#fff3e0; border:1px solid #ffb74d; }
+.oura-sync-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; text-transform:uppercase; letter-spacing:0.4px; white-space:nowrap; }
+.oura-sync-badge.api   { background:#e3f2fd; color:#0d47a1; }
+.oura-sync-badge.error { background:#ffebee; color:#b71c1c; }
 </style>
 </head>
 <body>
@@ -340,7 +364,15 @@ button.valve-btn:hover { background: #e1bee7; }
     </div>
   </div>
   <div id="socialLeverPickerBox" class="social-lever-picker hidden">
-    <div class="lever-picker-title">🌙 How did the social night go? <span>Pick all that apply</span></div>
+    <div class="lever-picker-title">🌙 Social exception — tell me more</div>
+    <div class="social-type-selector">
+      <div class="social-type-label">What kind of night was this?</div>
+      <div class="social-type-options">
+        <div class="social-type-btn active" id="stypeRoutine" data-type="routine" onclick="setSocialType('routine')">Routine social<small>Could've optimized more</small></div>
+        <div class="social-type-btn" id="stypeHighValue" data-type="high_value" onclick="setSocialType('high_value')">⭐ Rare / meaningful<small>Conscious trade — worth it</small></div>
+      </div>
+    </div>
+    <div class="lever-picker-title" id="socialFrictionTitle" style="margin-top:12px;">What caused it? <span>Pick all that apply</span></div>
     <div class="lever-checks" id="socialLeverChecks"></div>
     <div class="lever-picker-actions">
       <button class="primary" onclick="saveSocialLeverPick()">Save</button>
@@ -349,8 +381,9 @@ button.valve-btn:hover { background: #e1bee7; }
   </div>
 
   <!-- ── Daily morning log ── -->
-  <div class="section-h" style="margin-top:20px;">Oura — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">log daily after waking</span></div>
+  <div class="section-h" style="margin-top:20px;">Oura — this morning <span style="font-size:10px;font-weight:400;color:#aaa;text-transform:none;letter-spacing:0;">auto-filled via API · edit to override</span></div>
   <div class="card" style="padding:14px;">
+    <div id="ouraSyncBar" class="oura-sync-bar"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
       <div class="whoop-field">
         <label>Sleep score <span style="font-weight:400;color:#bbb;">(0–100)</span></label>
@@ -496,6 +529,19 @@ button.valve-btn:hover { background: #e1bee7; }
         <button onclick="restartSystem()">↺ Restart system</button>
         <button onclick="resetRamp()">⚙ Reset ramp</button>
       </div>
+      <div style="margin-top:18px;padding-top:14px;border-top:1px dashed #d8d4c8;">
+        <div class="section-h" style="margin-bottom:8px;">Oura API — Personal Access Token</div>
+        <div class="tiny" style="margin-bottom:10px;padding:8px 10px;background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;color:#0d47a1;line-height:1.6;">
+          🔗 <b>One-time setup.</b> Go to <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" style="color:#1a73e8;">cloud.ouraring.com/personal-access-tokens ↗</a> → create a token → paste it here.<br>
+          Somnus will then auto-fill Sleep Score, Efficiency &amp; Latency every morning.
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="ouraTokenIn" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Paste your Oura PAT here" style="flex:1;min-width:0;font-size:12px;font-family:monospace;">
+          <button class="primary" onclick="saveOuraToken()" style="white-space:nowrap;padding:8px 14px;">Save token</button>
+          <span class="save-flash" id="saveFlashOuraToken">✓ Saved</span>
+        </div>
+        <div class="tiny" style="margin-top:6px;color:#aaa;">Stored only on this device (localStorage). Token never leaves Somnus.</div>
+      </div>
     </div>
   </details>
 </div>
@@ -605,7 +651,7 @@ function needToHhmm(min) { return Math.floor(min/60)+':'+String(min%60).padStart
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const DEFAULTS = {
-  settings: { wake:'09:00', mode:'ET', viewOverride:null, sleepNeedMin:DEFAULT_SLEEP_NEED_MIN, sleepNeedUpdatedAt:null, efficiencyPct:DEFAULT_EFFICIENCY_PCT, lifestyle:{caffeine:false,alcohol:false} },
+  settings: { wake:'09:00', mode:'ET', viewOverride:null, sleepNeedMin:DEFAULT_SLEEP_NEED_MIN, sleepNeedUpdatedAt:null, efficiencyPct:DEFAULT_EFFICIENCY_PCT, lifestyle:{caffeine:false,alcohol:false}, ouraToken:null },
   data:{}, valves:{}, ramp:null,
   health:{ checks:{}, lastChecked:null, dismissed:false },
   emergency:{ active:false, manualOverride:null },
@@ -652,6 +698,7 @@ function saveState(s) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s
 let state = loadState();
 let pendingLeverDate = null;
 let pendingSocialLeverDate = null;
+let pendingSocialType = 'routine';
 
 // ── Date/time utils ───────────────────────────────────────────────────────────
 function ymd(d) { return d.toISOString().slice(0,10); }
@@ -990,22 +1037,39 @@ function buildSocialLeverPickerHTML() {
 }
 function toggleSocialLeverCheck(key){ const cb=document.getElementById('scb-'+key);cb.checked=!cb.checked;syncSocialLeverCheck(key); }
 function syncSocialLeverCheck(key){ const cb=document.getElementById('scb-'+key),row=document.getElementById('slc-'+key); if(cb.checked)row.classList.add('checked');else row.classList.remove('checked'); }
+function setSocialType(type) {
+  pendingSocialType = type;
+  ['stypeRoutine','stypeHighValue'].forEach(id => { const el=document.getElementById(id); if(el) el.classList.toggle('active', el.dataset.type===type); });
+  const title = document.getElementById('socialFrictionTitle');
+  if (title) {
+    if (type==='high_value') title.innerHTML = 'Anything that made it harder? <span>Optional — skip if it was all intentional</span>';
+    else title.innerHTML = 'What caused it? <span>Pick all that apply</span>';
+  }
+}
 function showSocialLeverPicker(iso){
   pendingSocialLeverDate=iso;
+  pendingSocialType=(state.data[iso]&&state.data[iso].socialType)||'routine';
   const box=document.getElementById('socialLeverPickerBox'); if(!box)return;
   document.getElementById('socialLeverChecks').innerHTML=buildSocialLeverPickerHTML();
   SOCIAL_LEVERS.forEach(lv=>{ const cb=document.getElementById('scb-'+lv.key);if(cb)cb.checked=false; const row=document.getElementById('slc-'+lv.key);if(row)row.classList.remove('checked'); });
   const existing=(state.data[iso]&&state.data[iso].socialLevers)||[];
   existing.forEach(k=>{ const cb=document.getElementById('scb-'+k);if(cb)cb.checked=true; const row=document.getElementById('slc-'+k);if(row)row.classList.add('checked'); });
+  setSocialType(pendingSocialType);
   box.classList.remove('hidden');
   box.scrollIntoView({behavior:'smooth',block:'center'});
 }
 function saveSocialLeverPick(){
   const selected=SOCIAL_LEVERS.map(lv=>lv.key).filter(k=>{ const cb=document.getElementById('scb-'+k);return cb&&cb.checked; });
-  if(pendingSocialLeverDate){ state.data[pendingSocialLeverDate]=state.data[pendingSocialLeverDate]||{status:'social'}; state.data[pendingSocialLeverDate].socialLevers=selected.length?selected:undefined; if(!selected.length)delete state.data[pendingSocialLeverDate].socialLevers; }
-  pendingSocialLeverDate=null; document.getElementById('socialLeverPickerBox').classList.add('hidden'); saveState(state);renderAll();
+  if(pendingSocialLeverDate){
+    state.data[pendingSocialLeverDate]=state.data[pendingSocialLeverDate]||{status:'social'};
+    state.data[pendingSocialLeverDate].socialLevers=selected.length?selected:undefined;
+    if(!selected.length) delete state.data[pendingSocialLeverDate].socialLevers;
+    state.data[pendingSocialLeverDate].socialType=pendingSocialType;
+  }
+  pendingSocialLeverDate=null; pendingSocialType='routine';
+  document.getElementById('socialLeverPickerBox').classList.add('hidden'); saveState(state);renderAll();
 }
-function cancelSocialLeverPick(){ pendingSocialLeverDate=null; document.getElementById('socialLeverPickerBox').classList.add('hidden'); }
+function cancelSocialLeverPick(){ pendingSocialLeverDate=null; pendingSocialType='routine'; document.getElementById('socialLeverPickerBox').classList.add('hidden'); }
 
 // ── Render: emergency banner ──────────────────────────────────────────────────
 function renderEmergencyBanner() {
@@ -1185,6 +1249,9 @@ function renderScorecard() {
   // Consistency: on-time nights out of full week (yes or social = on time)
   const onTime = entries.filter(e => e.status === 'yes' || e.status === 'social').length;
   const consistPct = Math.round(onTime / 7 * 100);
+  const routineSocial = entries.filter(e => e.status === 'social' && e.socialType !== 'high_value').length;
+  const highValueSocial = entries.filter(e => e.status === 'social' && e.socialType === 'high_value').length;
+  const missedNights = entries.filter(e => e.status === 'no').length;
 
   // Oura Sleep Score: avg ouraScore logged
   const scoreAvg = avg(entries.map(e => e.ouraScore).filter(n => typeof n === 'number'));
@@ -1216,7 +1283,7 @@ function renderScorecard() {
   if (debtCls === 'sc-bad') bottlenecks.push('Sleep debt is critical — prioritize more time in bed every night.');
   else if (debtCls === 'sc-warn') bottlenecks.push('Sleep debt elevated — protect the schedule.');
   if (consistCls === 'sc-bad') bottlenecks.push('Consistency is the core problem — hit the window every night.');
-  else if (consistCls === 'sc-warn') bottlenecks.push('Consistency needs work — fewer exceptions this week.');
+  else if (consistCls === 'sc-warn') bottlenecks.push(routineSocial > 1 ? `${routineSocial} routine social nights adding up — fewer unplanned exceptions this week.` : 'Consistency needs work — fewer unplanned exceptions this week.');
   if (effCls === 'sc-bad') bottlenecks.push('Low efficiency — you\'re lying awake too long. Check phone/light in bed.');
   else if (effCls === 'sc-warn') bottlenecks.push('Efficiency below target — wind-down routine may need tightening.');
   if (scoreCls === 'sc-bad') bottlenecks.push('Sleep score low — check stress, alcohol, or late eating.');
@@ -1231,7 +1298,8 @@ function renderScorecard() {
     html += `<div class="sc-bottleneck">⚠ Bottleneck: ${bottlenecks[0]}</div>`;
   }
   html += '<div class="scorecard">';
-  html += card(consistPct, 'Consistency', 'target ≥6/7 nights', consistCls, 'Too many missed or social nights.', '%');
+  const consistFix = missedNights > routineSocial ? 'Missed nights are the main culprit — hit the window more.' : routineSocial > 0 ? `${routineSocial} routine social night${routineSocial>1?'s':''} affecting score.` : highValueSocial > 0 ? 'Rare nights are fine — watch for unplanned misses.' : 'Check for unplanned misses.';
+  html += card(consistPct, 'Consistency', 'target ≥6/7 nights', consistCls, consistFix, '%');
   html += card(scoreAvg, 'Sleep score', 'target ≥85 · Oura', scoreCls, 'Check stress, alcohol, late eating.', '');
   html += card(effAvg, 'Efficiency', 'target ≥85% · Oura', effCls, 'Reduce time awake in bed.', '%');
   html += card(debtAvg, 'Sleep debt', 'target <30 min · Whoop', debtCls, 'Get more time in bed.', 'm');
@@ -1272,9 +1340,9 @@ function renderStats() {
 // ── Render: sparkline + heatmaps ──────────────────────────────────────────────
 function renderTrend(){ const bars=document.getElementById('trendBars');if(!bars)return;bars.innerHTML='';for(let i=29;i>=0;i--){const e=state.data[daysAgo(i)],div=document.createElement('div');div.className='trend-bar '+(e?e.status:'empty');div.title=daysAgo(i)+(e?' — '+e.status:' — unlogged');bars.appendChild(div);} }
 function renderHmWeekdays(){ const wk=document.getElementById('hmWeekdays');if(!wk)return;wk.innerHTML='';const L=['S','M','T','W','T','F','S'];for(let i=27;i>=0;i--){const iso=daysAgo(i),div=document.createElement('div');div.className='weekday'+(isWeekend(iso)?' weekend':'');div.textContent=L[dayOfWeek(iso)];wk.appendChild(div);} }
-function renderHeatmap(){ const grid=document.getElementById('heatmap');if(!grid)return;grid.innerHTML='';const t=today();for(let i=27;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];let cls='hm-cell';if(e&&e.status)cls+=' '+e.status;if(iso===t)cls+=' today';if(isWeekend(iso))cls+=' weekend-col';if(v)cls+=' valve';const div=document.createElement('div');div.className=cls;div.title=iso+(e?' — '+e.status+(e.auto?' (auto)':''):' — unlogged')+(v?' · '+v+'v':'');grid.appendChild(div);} }
+function renderHeatmap(){ const grid=document.getElementById('heatmap');if(!grid)return;grid.innerHTML='';const t=today();for(let i=27;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];let cls='hm-cell';if(e&&e.status)cls+=' '+e.status;if(e&&e.status==='social'&&e.socialType==='high_value')cls+=' high-value';if(iso===t)cls+=' today';if(isWeekend(iso))cls+=' weekend-col';if(v)cls+=' valve';const div=document.createElement('div');div.className=cls;div.title=iso+(e?' — '+(e.status==='social'&&e.socialType==='high_value'?'⭐ rare/meaningful':e.status)+(e.auto?' (auto)':''):' — unlogged')+(v?' · '+v+'v':'');grid.appendChild(div);} }
 function renderWeekdays(){ const wk=document.getElementById('weekdays');if(!wk)return;wk.innerHTML='';const L=['S','M','T','W','T','F','S'];for(let i=13;i>=0;i--){const iso=daysAgo(i),div=document.createElement('div');div.className='weekday'+(isWeekend(iso)?' weekend':'');div.textContent=L[dayOfWeek(iso)];wk.appendChild(div);} }
-function renderGrid(){ const grid=document.getElementById('daysGrid');if(!grid)return;grid.innerHTML='';const t=today();for(let i=13;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];const div=document.createElement('div');div.className='day '+(e?e.status:'')+(iso===t?' today':'')+(isWeekend(iso)?' weekend-col':'')+(e&&e.auto?' autofill':'')+(v?' valve':'');div.innerHTML='<div class="d-num">'+dayOfMonth(iso)+'</div><div class="d-lbl">'+(e?e.status==='social'?'soc':e.status:'—')+'</div>';div.onclick=()=>cycleDay(iso);grid.appendChild(div);} }
+function renderGrid(){ const grid=document.getElementById('daysGrid');if(!grid)return;grid.innerHTML='';const t=today();for(let i=13;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];const isHV=e&&e.status==='social'&&e.socialType==='high_value';const div=document.createElement('div');div.className='day '+(e?e.status:'')+(isHV?' high-value':'')+(iso===t?' today':'')+(isWeekend(iso)?' weekend-col':'')+(e&&e.auto?' autofill':'')+(v?' valve':'');div.innerHTML='<div class="d-num">'+dayOfMonth(iso)+'</div><div class="d-lbl">'+(e?e.status==='social'?(isHV?'⭐':'soc'):e.status:'—')+'</div>';div.onclick=()=>cycleDay(iso);grid.appendChild(div);} }
 function renderLevers(){ const misses={};LEVERS.forEach(lv=>misses[lv.key]=0);for(let i=1;i<=7;i++){const e=state.data[daysAgo(i)];if(!e||e.status!=='no')continue;const keys=e.levers||(e.lever?[normalizeLeverKey(e.lever)]:[]);keys.forEach(k=>{if(misses[k]!==undefined)misses[k]++;});}const maxM=Math.max(0,...Object.values(misses));const grid=document.getElementById('leversGrid');if(!grid)return;grid.innerHTML='';LEVERS.forEach(lv=>{const div=document.createElement('div');div.className='lever'+(maxM>0&&misses[lv.key]===maxM?' hot':'');div.innerHTML=`<div class="lever-name">${LEVER_SHORT[lv.key]}</div><div class="lever-miss">${misses[lv.key]}</div>`;grid.appendChild(div);}); }
 
 // ── Render: alerts ────────────────────────────────────────────────────────────
@@ -1425,7 +1493,8 @@ function renderMorningStatus() {
   const statusEl = document.getElementById('lastNightStatus');
   if (statusEl) {
     if (d.status) {
-      const labels = { yes:'✓ Logged: Followed protocol', social:'● Logged: Social exception', no:'✕ Logged: Missed' };
+      const socialLabel = d.socialType==='high_value' ? '⭐ Logged: Rare / meaningful night' : '● Logged: Social exception';
+      const labels = { yes:'✓ Logged: Followed protocol', social:socialLabel, no:'✕ Logged: Missed' };
       const colors = { yes:'#1b5e20', social:'#6d4c00', no:'#b71c1c' };
       statusEl.textContent = (labels[d.status] || '') + ' · tap to change';
       statusEl.style.color = colors[d.status] || '#555';
@@ -1456,6 +1525,66 @@ function renderMorningStatus() {
     if (d.gap !== undefined) { gapEl.value = d.gap; gapEl.style.outline = '2px solid #a5d6a7'; gapEl.style.outlineOffset = '1px'; }
     else { if (!gapEl.matches(':focus')) { gapEl.value = ''; } gapEl.style.outline = ''; gapEl.style.outlineOffset = ''; }
   }
+
+  // Update Oura sync bar to reflect current state
+  renderOuraSyncBar();
+}
+
+function renderOuraSyncBar(transient){
+  const bar=document.getElementById('ouraSyncBar');
+  if(!bar)return;
+  const token=state.settings.ouraToken;
+  const entry=state.data[yesterday()]||{};
+
+  // Transient states (syncing in progress, or just-failed)
+  if(transient==='syncing'){
+    bar.className='oura-sync-bar';
+    bar.innerHTML='<span class="oura-sync-badge api">Syncing…</span><span style="margin-left:2px;">Fetching from Oura…</span>';
+    return;
+  }
+  if(transient==='unauthorized'){
+    bar.className='oura-sync-bar error';
+    bar.innerHTML='<span class="oura-sync-badge error">Auth failed</span><span style="flex:1;margin-left:4px;">Token rejected — update in Settings below. <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" style="color:#0d47a1;">Get a new token ↗</a></span>';
+    return;
+  }
+  if(transient==='network_error'){
+    bar.className='oura-sync-bar error';
+    bar.innerHTML='<span class="oura-sync-badge error">Offline</span><span style="flex:1;margin-left:4px;">Couldn\'t reach Oura.</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Retry</button>';
+    return;
+  }
+  if(transient==='api_error'){
+    bar.className='oura-sync-bar error';
+    bar.innerHTML='<span class="oura-sync-badge error">API error</span><span style="flex:1;margin-left:4px;">Oura returned an error.</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Retry</button>';
+    return;
+  }
+  if(transient==='no_data'){
+    bar.className='oura-sync-bar';
+    bar.innerHTML='<span class="oura-sync-badge api">Oura</span><span style="flex:1;margin-left:4px;">No sleep data yet — Oura may still be processing. Try again in a few minutes.</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Retry</button>';
+    return;
+  }
+
+  // Steady-state: derived from persisted data
+  if(!token){
+    bar.className='oura-sync-bar';
+    bar.innerHTML='<span style="color:#aaa;font-size:11px;">💡 Add your Oura Personal Access Token in <b>Settings</b> below to enable auto-sync.</span>';
+    return;
+  }
+  if(entry.ouraSyncedAt&&entry.ouraSource==='api'){
+    const t=new Date(entry.ouraSyncedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    bar.className='oura-sync-bar synced';
+    bar.innerHTML='<span class="oura-sync-badge api">Oura API</span><span style="flex:1;margin-left:4px;">Auto-filled at '+t+'</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Re-sync</button>';
+    return;
+  }
+  // Token set, manual data or no sync yet
+  const hasManual=entry.ouraSource==='manual'&&(entry.ouraScore!==undefined||entry.ouraEff!==undefined||entry.ouraLat!==undefined);
+  if(hasManual){
+    bar.className='oura-sync-bar';
+    bar.innerHTML='<span class="oura-sync-badge error">Manual</span><span style="flex:1;margin-left:4px;">Values entered manually.</span><button onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Pull from API</button>';
+    return;
+  }
+  // Token set, nothing logged yet
+  bar.className='oura-sync-bar';
+  bar.innerHTML='<span class="oura-sync-badge api">Oura</span><span style="flex:1;margin-left:4px;">Ready — sync last night\'s data.</span><button class="primary" onclick="syncOuraDaily(true)" style="padding:4px 10px;font-size:11px;min-height:28px;">↻ Sync now</button>';
 }
 
 function renderAll() {
@@ -1480,8 +1609,74 @@ function saveOuraDaily(){
   let changed=false;
   for(const [id,key,min,max] of fields){ const v=document.getElementById(id).value;if(v==='')continue;const n=parseInt(v,10);if(isNaN(n)||n<min||n>max){alert(key+' out of range.');return;}state.data[iso]=state.data[iso]||{};state.data[iso][key]=n;changed=true; }
   if(!changed)return;
+  state.data[iso].ouraSource='manual'; // mark as manually entered
   saveState(state);renderAll();
   const flash=document.getElementById('saveFlashOura');flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);
+}
+
+// ── Oura API integration ──────────────────────────────────────────────────────
+function saveOuraToken(){
+  const v=document.getElementById('ouraTokenIn').value.trim();
+  state.settings.ouraToken=v||null;
+  saveState(state);
+  const flash=document.getElementById('saveFlashOuraToken');
+  if(flash){flash.classList.add('on');setTimeout(()=>flash.classList.remove('on'),1800);}
+  renderOuraSyncBar();
+  if(v) syncOuraDaily(true); // immediately attempt sync with new token
+}
+
+async function fetchOuraData(){
+  const token=state.settings.ouraToken;
+  if(!token) return{error:'no_token'};
+  const headers={'Authorization':'Bearer '+token};
+  // Oura attributes a sleep session to the day you wake up, which from Somnus's
+  // perspective is today() (we're logging "last night" in the morning view).
+  const dateStr=today();
+  const params='?start_date='+dateStr+'&end_date='+dateStr;
+  try{
+    const [scoreRes,sleepRes]=await Promise.all([
+      fetch('https://api.ouraring.com/v2/usercollection/daily_sleep'+params,{headers}),
+      fetch('https://api.ouraring.com/v2/usercollection/sleep'+params,{headers})
+    ]);
+    if(scoreRes.status===401||sleepRes.status===401) return{error:'unauthorized'};
+    if(!scoreRes.ok||!sleepRes.ok) return{error:'api_error'};
+    const [scoreData,sleepData]=await Promise.all([scoreRes.json(),sleepRes.json()]);
+
+    // Daily sleep score (one entry per day)
+    const daily=scoreData.data&&scoreData.data[0];
+    const score=(daily&&typeof daily.score==='number')?daily.score:null;
+
+    // Main overnight session — type:'long_sleep', pick longest if multiple
+    const sessions=(sleepData.data||[]).filter(s=>s.type==='long_sleep');
+    const main=sessions.sort((a,b)=>(b.total_sleep_duration||0)-(a.total_sleep_duration||0))[0]||null;
+    const efficiency=(main&&typeof main.efficiency==='number')?main.efficiency:null;
+    const latencyMin=(main&&typeof main.latency==='number')?Math.round(main.latency/60):null;
+
+    if(score===null&&efficiency===null&&latencyMin===null) return{error:'no_data'};
+    return{score,efficiency,latencyMin,ok:true};
+  }catch(e){
+    return{error:'network_error'};
+  }
+}
+
+async function syncOuraDaily(manual){
+  const token=state.settings.ouraToken;
+  if(!token){renderOuraSyncBar();return;}
+  const iso=yesterday();
+  const entry=state.data[iso]||{};
+  // Skip auto-sync if already synced today (avoid hitting API on every render)
+  if(!manual&&entry.ouraSyncedAt&&entry.ouraSyncedAt.slice(0,10)===today()) return;
+  renderOuraSyncBar('syncing');
+  const result=await fetchOuraData();
+  if(!result.ok){renderOuraSyncBar(result.error);return;}
+  state.data[iso]=state.data[iso]||{};
+  if(result.score!==null)      state.data[iso].ouraScore=result.score;
+  if(result.efficiency!==null) state.data[iso].ouraEff=result.efficiency;
+  if(result.latencyMin!==null) state.data[iso].ouraLat=result.latencyMin;
+  state.data[iso].ouraSyncedAt=new Date().toISOString();
+  state.data[iso].ouraSource='api';
+  saveState(state);
+  renderAll(); // this calls renderOuraSyncBar() via renderMorningStatus
 }
 function saveInBedTime(){
   const iso=yesterday();
@@ -1567,8 +1762,15 @@ document.getElementById('wakeInput').addEventListener('change',function(e){ stat
 document.getElementById('wakeInputEv').value=state.settings.wake;
 document.getElementById('wakeInputEv').addEventListener('change',function(e){ state.settings.wake=e.target.value;document.getElementById('wakeInput').value=e.target.value;saveState(state);renderAll(); });
 document.querySelectorAll('#modeRow .mode-btn, #modeRowEv .mode-btn').forEach(b=>{ b.addEventListener('click',()=>{ state.settings.mode=b.dataset.mode;saveState(state);renderAll(); }); });
+
+// Pre-fill Oura token input if token already saved
+const _ouraTokenEl=document.getElementById('ouraTokenIn');
+if(_ouraTokenEl&&state.settings.ouraToken) _ouraTokenEl.value=state.settings.ouraToken;
+
 setView(state.settings.viewOverride||currentAutoView(),false);
 renderAll();
+// Auto-sync Oura on open (non-blocking; skips if already synced today)
+syncOuraDaily(false);
 setInterval(()=>{
   renderTimeline();if(autoDefaultIfDue())renderAll();runDailyGateCheck();
   if(!state.settings.viewOverride){ const auto=currentAutoView();const cur=document.getElementById('morningView').classList.contains('hidden-view')?'evening':'morning';if(auto!==cur)setView(auto,false); }
