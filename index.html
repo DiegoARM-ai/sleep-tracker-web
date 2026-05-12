@@ -318,6 +318,20 @@ button.valve-btn:hover { background: #e1bee7; }
 .oura-sync-badge { font-size:10px; font-weight:700; padding:2px 7px; border-radius:20px; text-transform:uppercase; letter-spacing:0.4px; white-space:nowrap; }
 .oura-sync-badge.api   { background:#e3f2fd; color:#0d47a1; }
 .oura-sync-badge.error { background:#ffebee; color:#b71c1c; }
+
+/* ── Travel status ── */
+.day.travel { background: #e8eaf6; border-color: #9fa8da; }
+.day.travel .d-num { color: #283593; }
+.hm-cell.travel { background: #9fa8da; }
+.trend-bar.travel { background: #9fa8da; height: 16px; }
+
+/* ── Welcome-back banner ── */
+.welcome-back-banner { background: #e3f2fd; border: 1px solid #90caf9; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+.welcome-back-banner .wb-title { font-size: 15px; font-weight: 700; color: #0d47a1; margin-bottom: 4px; }
+.welcome-back-banner .wb-sub { font-size: 12px; color: #333; line-height: 1.6; margin-bottom: 12px; }
+.trip-fill-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.trip-fill-row label { font-size: 12px; color: #555; font-weight: 500; }
+.trip-fill-row input[type="date"] { font-size: 13px; padding: 6px 8px; border: 1px solid #d8d4c8; border-radius: 6px; font-family: inherit; }
 </style>
 </head>
 <body>
@@ -331,6 +345,7 @@ button.valve-btn:hover { background: #e1bee7; }
 
 <!-- MORNING VIEW -->
 <div id="morningView">
+  <div id="welcomeBackBanner"></div>
   <div id="emergencyBanner"></div>
   <div id="sleepInCard"></div>
   <div id="healthPanel"></div>
@@ -342,6 +357,7 @@ button.valve-btn:hover { background: #e1bee7; }
     <button class="primary" onclick="logLastNight('yes')">✓ Followed protocol</button>
     <button class="amber" onclick="logLastNight('social')">● Social exception</button>
     <button class="warn" onclick="logLastNight('no')">✕ Missed</button>
+    <button style="background:#e8eaf6;color:#283593;border-color:#9fa8da;" onclick="logLastNight('travel')">✈ Trip night</button>
   </div>
   <div id="lastNightStatus" style="margin-top:8px;font-size:13px;font-weight:600;min-height:18px;"></div>
   <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
@@ -817,7 +833,8 @@ function weeklyActualData() {
 // ── Gate ──────────────────────────────────────────────────────────────────────
 function evaluateGate() {
   const entries=[]; for(let i=1;i<=7;i++) entries.push(state.data[daysAgo(i)]);
-  const logged=entries.filter(Boolean);
+  // Exclude travel days from adherence gate — they don't count for or against
+  const logged=entries.filter(e=>e&&e.status!=='travel');
   const wd=weeklyActualData(); const withInBed=wd.filter(d=>d.delta!==null);
   let inBedFlag=false,aheadFlag=false,avgInBedDelta=null;
   if(withInBed.length>=4){
@@ -998,10 +1015,74 @@ function buildSchedule() {
   });
 }
 
+// ── Travel / gap detection ────────────────────────────────────────────────────
+// Returns the number of consecutive unlogged days ending at yesterday.
+function detectGap() {
+  let g=0;
+  for(let i=1;i<=30;i++){
+    const d=state.data[daysAgo(i)];
+    if(!d||!d.status) g++;
+    else break;
+  }
+  return g;
+}
+
+function renderWelcomeBack() {
+  const container=document.getElementById('welcomeBackBanner');
+  if(!container)return;
+  const gap=detectGap();
+  if(gap<3||state.settings.welcomeBackDismissed===today()){container.innerHTML='';return;}
+  const daysWord=gap===1?'1 day':gap+' days';
+  const startIso=daysAgo(gap);
+  const endIso=yesterday();
+  container.innerHTML=`<div class="welcome-back-banner">
+    <div class="wb-title">✈ Welcome back — ${daysWord} away</div>
+    <div class="wb-sub">Looks like you were away for ${gap} days. Mark those nights as a trip so they don't count against your adherence or break your streak.</div>
+    <div class="trip-fill-row">
+      <label>From:</label>
+      <input type="date" id="tripStartIn" value="${startIso}" max="${endIso}">
+      <label>To:</label>
+      <input type="date" id="tripEndIn" value="${endIso}" max="${endIso}">
+      <button class="primary" onclick="markTripFromBanner()" style="padding:8px 14px;font-size:12px;min-height:36px;">Mark as trip ✈</button>
+      <button onclick="dismissWelcomeBack()" style="padding:8px 14px;font-size:12px;min-height:36px;">Dismiss</button>
+    </div>
+    <div class="tiny" style="margin-top:8px;color:#888;">Trip nights are excluded from adherence % and don't break your streak. Correct individual days via tap-to-correct grid below.</div>
+  </div>`;
+}
+
+function markTripFromBanner() {
+  const s=document.getElementById('tripStartIn')?.value;
+  const e=document.getElementById('tripEndIn')?.value;
+  if(!s||!e){alert('Select a start and end date.');return;}
+  markTripRange(s,e);
+  state.settings.welcomeBackDismissed=today();
+  saveState(state);renderAll();
+}
+
+function markTripRange(startIso,endIso) {
+  let d=new Date(startIso+'T12:00:00');
+  const end=new Date(endIso+'T12:00:00');
+  while(d<=end){
+    const iso=ymd(d);
+    state.data[iso]=state.data[iso]||{};
+    state.data[iso].status='travel';
+    delete state.data[iso].auto;
+    d.setDate(d.getDate()+1);
+  }
+  saveState(state);renderAll();
+}
+
+function dismissWelcomeBack() {
+  state.settings.welcomeBackDismissed=today();
+  saveState(state);renderAll();
+}
+
 // ── Auto-default ──────────────────────────────────────────────────────────────
 function autoDefaultIfDue() {
   if(new Date().getHours()<11)return false;
   const y=yesterday(); if(state.data[y])return false;
+  // Don't auto-fill if returning from a trip gap — show welcome-back banner instead
+  if(detectGap()>=3)return false;
   state.data[y]={status:'yes',auto:true}; saveState(state); return true;
 }
 function clearAutofillFlag(iso) { if(state.data[iso]&&state.data[iso].auto){delete state.data[iso].auto;saveState(state);} }
@@ -1245,14 +1326,18 @@ function renderTimeline() {
 function renderScorecard() {
   const area = document.getElementById('scorecardArea'); if (!area) return;
   const days = []; for (let i = 1; i <= 7; i++) days.push(daysAgo(i));
-  const entries = days.map(d => state.data[d]).filter(Boolean);
-  if (entries.length === 0) { area.innerHTML = ''; return; }
+  const allEntries = days.map(d => state.data[d]).filter(Boolean);
+  if (allEntries.length === 0) { area.innerHTML = ''; return; }
+  // Exclude travel days — only score non-trip nights
+  const travelCount = allEntries.filter(e => e.status === 'travel').length;
+  const entries = allEntries.filter(e => e.status !== 'travel');
+  const activeDays = Math.max(1, 7 - travelCount); // denominator excludes travel nights
 
   const avg = arr => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
 
-  // Consistency: on-time nights out of full week (yes or social = on time)
+  // Consistency: on-time nights out of non-travel week nights
   const onTime = entries.filter(e => e.status === 'yes' || e.status === 'social').length;
-  const consistPct = Math.round(onTime / 7 * 100);
+  const consistPct = Math.round(onTime / activeDays * 100);
   const routineSocial = entries.filter(e => e.status === 'social' && e.socialType !== 'high_value').length;
   const highValueSocial = entries.filter(e => e.status === 'social' && e.socialType === 'high_value').length;
   const missedNights = entries.filter(e => e.status === 'no').length;
@@ -1314,11 +1399,13 @@ function renderScorecard() {
 // ── Render: stats ─────────────────────────────────────────────────────────────
 function renderStats() {
   const days=[]; for(let i=1;i<=7;i++) days.push(daysAgo(i));
-  const entries=days.map(d=>state.data[d]).filter(Boolean);
+  const allEntries=days.map(d=>state.data[d]).filter(Boolean);
+  // Exclude travel days — they don't count for or against adherence
+  const entries=allEntries.filter(e=>e.status!=='travel');
   const statsArea=document.getElementById('statsArea'); if(!statsArea)return;
-  if(entries.length===0){ statsArea.innerHTML='<div class="empty-state"><div class="emoji">🌙</div><p><b>No nights logged yet.</b></p><p>Tap "Followed protocol" after your first night.</p></div>'; return; }
+  if(allEntries.length===0){ statsArea.innerHTML='<div class="empty-state"><div class="emoji">🌙</div><p><b>No nights logged yet.</b></p><p>Tap "Followed protocol" after your first night.</p></div>'; return; }
   const good=entries.filter(e=>e.status==='yes'||e.status==='social').length;
-  const rate=Math.round(good/entries.length*100);
+  const rate=Math.round(good/Math.max(1,entries.length)*100);
   let valves=0; for(let i=1;i<=7;i++){const d=daysAgo(i);if(state.valves[d])valves+=state.valves[d];}
   const avg=arr=>arr.length?Math.round(arr.reduce((a,b)=>a+b,0)/arr.length):null;
   const gapAvg=avg(entries.map(e=>e.gap).filter(n=>typeof n==='number'));
@@ -1346,7 +1433,7 @@ function renderTrend(){ const bars=document.getElementById('trendBars');if(!bars
 function renderHmWeekdays(){ const wk=document.getElementById('hmWeekdays');if(!wk)return;wk.innerHTML='';const L=['S','M','T','W','T','F','S'];for(let i=27;i>=0;i--){const iso=daysAgo(i),div=document.createElement('div');div.className='weekday'+(isWeekend(iso)?' weekend':'');div.textContent=L[dayOfWeek(iso)];wk.appendChild(div);} }
 function renderHeatmap(){ const grid=document.getElementById('heatmap');if(!grid)return;grid.innerHTML='';const t=today();for(let i=27;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];let cls='hm-cell';if(e&&e.status)cls+=' '+e.status;if(e&&e.status==='social'&&e.socialType==='high_value')cls+=' high-value';if(iso===t)cls+=' today';if(isWeekend(iso))cls+=' weekend-col';if(v)cls+=' valve';const div=document.createElement('div');div.className=cls;div.title=iso+(e?' — '+(e.status==='social'&&e.socialType==='high_value'?'⭐ rare/meaningful':e.status)+(e.auto?' (auto)':''):' — unlogged')+(v?' · '+v+'v':'');grid.appendChild(div);} }
 function renderWeekdays(){ const wk=document.getElementById('weekdays');if(!wk)return;wk.innerHTML='';const L=['S','M','T','W','T','F','S'];for(let i=13;i>=0;i--){const iso=daysAgo(i),div=document.createElement('div');div.className='weekday'+(isWeekend(iso)?' weekend':'');div.textContent=L[dayOfWeek(iso)];wk.appendChild(div);} }
-function renderGrid(){ const grid=document.getElementById('daysGrid');if(!grid)return;grid.innerHTML='';const t=today();for(let i=13;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];const isHV=e&&e.status==='social'&&e.socialType==='high_value';const div=document.createElement('div');div.className='day '+(e?e.status:'')+(isHV?' high-value':'')+(iso===t?' today':'')+(isWeekend(iso)?' weekend-col':'')+(e&&e.auto?' autofill':'')+(v?' valve':'');div.innerHTML='<div class="d-num">'+dayOfMonth(iso)+'</div><div class="d-lbl">'+(e?e.status==='social'?(isHV?'⭐':'soc'):e.status:'—')+'</div>';div.onclick=()=>cycleDay(iso);grid.appendChild(div);} }
+function renderGrid(){ const grid=document.getElementById('daysGrid');if(!grid)return;grid.innerHTML='';const t=today();for(let i=13;i>=0;i--){const iso=daysAgo(i),e=state.data[iso],v=state.valves[iso];const isHV=e&&e.status==='social'&&e.socialType==='high_value';const div=document.createElement('div');div.className='day '+(e?e.status:'')+(isHV?' high-value':'')+(iso===t?' today':'')+(isWeekend(iso)?' weekend-col':'')+(e&&e.auto?' autofill':'')+(v?' valve':'');div.innerHTML='<div class="d-num">'+dayOfMonth(iso)+'</div><div class="d-lbl">'+(e?e.status==='travel'?'✈':e.status==='social'?(isHV?'⭐':'soc'):e.status:'—')+'</div>';div.onclick=()=>cycleDay(iso);grid.appendChild(div);} }
 function renderLevers(){ const misses={};LEVERS.forEach(lv=>misses[lv.key]=0);for(let i=1;i<=7;i++){const e=state.data[daysAgo(i)];if(!e||e.status!=='no')continue;const keys=e.levers||(e.lever?[normalizeLeverKey(e.lever)]:[]);keys.forEach(k=>{if(misses[k]!==undefined)misses[k]++;});}const maxM=Math.max(0,...Object.values(misses));const grid=document.getElementById('leversGrid');if(!grid)return;grid.innerHTML='';LEVERS.forEach(lv=>{const div=document.createElement('div');div.className='lever'+(maxM>0&&misses[lv.key]===maxM?' hot':'');div.innerHTML=`<div class="lever-name">${LEVER_SHORT[lv.key]}</div><div class="lever-miss">${misses[lv.key]}</div>`;grid.appendChild(div);}); }
 
 // ── Render: alerts ────────────────────────────────────────────────────────────
@@ -1371,7 +1458,7 @@ function renderAlert() {
   let valves=0; for(let i=1;i<=7;i++){const d=daysAgo(i);if(state.valves[d])valves+=state.valves[d];}
   if(valves>=3) html+=`<div class="alert">⚠ <b>${valves} pressure valves in 7 days.</b> Leading indicator of system decay.</div>`;
   let consNo=0;
-  for(let i=1;i<=7;i++){const e=state.data[daysAgo(i)];if(e&&e.status==='no')consNo++;else break;}
+  for(let i=1;i<=7;i++){const e=state.data[daysAgo(i)];if(!e)break;if(e.status==='travel')continue;if(e.status==='no')consNo++;else break;}
   const g3=a=>a.filter(n=>typeof n==='number');
   const last3gaps=g3([1,2,3].map(i=>state.data[daysAgo(i)]?.gap));
   const last3lats=g3([1,2,3].map(i=>state.data[daysAgo(i)]?.ouraLat));
@@ -1387,7 +1474,8 @@ function renderAlert() {
   else if(widening) html+=`<div class="alert">⚠ <b>Sleep debt widening.</b> Gap grew 20+ min over 3 nights.</div>`;
   else if(latHigh) html+=`<div class="alert">⚠ <b>High latency (>30 min avg).</b> Check phone/light in bed.</div>`;
   let streak=0;
-  for(let i=1;i<=30;i++){const e=state.data[daysAgo(i)];if(e&&(e.status==='yes'||e.status==='social'))streak++;else break;}
+  // Travel nights are transparent — they don't count toward streak but don't break it either
+  for(let i=1;i<=30;i++){const e=state.data[daysAgo(i)];if(!e)break;if(e.status==='travel')continue;if(e.status==='yes'||e.status==='social')streak++;else break;}
   if(streak>=7&&consNo===0&&valves<3&&!isEmergencyMode()) html+=`<div class="alert success">🌙 <b>${streak}-night streak.</b> System is working.</div>`;
   box.innerHTML=html;
 }
@@ -1504,8 +1592,8 @@ function renderMorningStatus() {
   if (statusEl) {
     if (d.status) {
       const socialLabel = d.socialType==='high_value' ? '⭐ Logged: Rare / meaningful night' : '● Logged: Social exception';
-      const labels = { yes:'✓ Logged: Followed protocol', social:socialLabel, no:'✕ Logged: Missed' };
-      const colors = { yes:'#1b5e20', social:'#6d4c00', no:'#b71c1c' };
+      const labels = { yes:'✓ Logged: Followed protocol', social:socialLabel, no:'✕ Logged: Missed', travel:'✈ Logged: Trip night' };
+      const colors = { yes:'#1b5e20', social:'#6d4c00', no:'#b71c1c', travel:'#283593' };
       statusEl.textContent = (labels[d.status] || '') + ' · tap to change';
       statusEl.style.color = colors[d.status] || '#555';
     } else {
@@ -1600,6 +1688,7 @@ function renderOuraSyncBar(transient){
 
 function renderAll() {
   renderEmergencyBanner();
+  renderWelcomeBack();
   renderSleepIn();
   renderHealthPanel();
   renderRamp();
