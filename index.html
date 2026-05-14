@@ -319,6 +319,16 @@ button.valve-btn:hover { background: #e1bee7; }
 .oura-sync-badge.api   { background:#e3f2fd; color:#0d47a1; }
 .oura-sync-badge.error { background:#ffebee; color:#b71c1c; }
 
+/* ── Redeye recovery card ── */
+.redeye-card { background: #fff8e1; border: 1.5px solid #ffb74d; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+.redeye-card .rc-title { font-size: 14px; font-weight: 700; color: #5d4037; margin-bottom: 2px; }
+.redeye-card .rc-meta { font-size: 11px; color: #999; margin-bottom: 10px; }
+.redeye-card .rc-nap { background: rgba(255,255,255,0.7); border: 1px solid #ffe082; border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #5d4037; margin-bottom: 10px; line-height: 1.7; }
+.redeye-card .rc-rules { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: #555; margin-bottom: 12px; line-height: 1.5; }
+.redeye-severe { background: #fff3e0 !important; border-color: #ef5350 !important; }
+.redeye-severe .rc-title { color: #b71c1c !important; }
+.redeye-severe .rc-nap { border-color: #ef9a9a !important; background: #ffebee !important; color: #b71c1c !important; }
+
 /* ── Travel status ── */
 .day.travel { background: #e8eaf6; border-color: #9fa8da; }
 .day.travel .d-num { color: #283593; }
@@ -347,6 +357,7 @@ button.valve-btn:hover { background: #e1bee7; }
 <div id="morningView">
   <div id="welcomeBackBanner"></div>
   <div id="emergencyBanner"></div>
+  <div id="redeyeCard"></div>
   <div id="sleepInCard"></div>
   <div id="healthPanel"></div>
   <div id="rampContainer"></div>
@@ -1156,6 +1167,94 @@ function saveSocialLeverPick(){
 }
 function cancelSocialLeverPick(){ pendingSocialLeverDate=null; pendingSocialType='routine'; document.getElementById('socialLeverPickerBox').classList.add('hidden'); }
 
+// ── Redeye recovery protocol ──────────────────────────────────────────────────
+// Redeye = < 5h total sleep OR Oura score < 65
+function isRedeyeNight(iso) {
+  const e = state.data[iso];
+  if (!e) return false;
+  // Prefer stored totalSleepMin; fall back to deriving from gap
+  const totalSleep = typeof e.totalSleepMin === 'number'
+    ? e.totalSleepMin
+    : (typeof e.gap === 'number' ? Math.max(0, (state.settings.sleepNeedMin||DEFAULT_SLEEP_NEED_MIN) - e.gap) : null);
+  if (totalSleep !== null && totalSleep < 300) return true; // < 5h
+  if (typeof e.ouraScore === 'number' && e.ouraScore < 65) return true;
+  return false;
+}
+function isRedeyeSevere(iso) {
+  const e = state.data[iso];
+  if (!e) return false;
+  const totalSleep = typeof e.totalSleepMin === 'number'
+    ? e.totalSleepMin
+    : (typeof e.gap === 'number' ? Math.max(0, (state.settings.sleepNeedMin||DEFAULT_SLEEP_NEED_MIN) - e.gap) : null);
+  if (totalSleep !== null && totalSleep < 180) return true; // < 3h
+  if (typeof e.ouraScore === 'number' && e.ouraScore < 50) return true;
+  return false;
+}
+
+function renderRedeyeCard() {
+  const container = document.getElementById('redeyeCard');
+  if (!container) return;
+  const yIso = yesterday();
+  if (!isRedeyeNight(yIso) || state.settings.redeyeDismissed === today()) {
+    container.innerHTML = ''; return;
+  }
+  const e = state.data[yIso] || {};
+  const severe = isRedeyeSevere(yIso);
+  const totalSleep = e.totalSleepMin;
+  const score = e.ouraScore;
+  const now = nowMinutes();
+
+  // Label for last night's data
+  let sleepLabel = 'No ring data';
+  if (typeof totalSleep === 'number') {
+    sleepLabel = Math.floor(totalSleep/60)+'h '+String(totalSleep%60).padStart(2,'0')+'m actual sleep';
+    if (typeof score === 'number') sleepLabel += ' · score '+score;
+  } else if (typeof score === 'number') {
+    sleepLabel = 'Sleep score: '+score;
+  }
+
+  // Tonight's modified in-bed target (1h earlier than current ramp target)
+  const tonightModified = fmtR(fromSignedSleep(toSignedSleep(activeSleepTarget()) - 60));
+
+  // Time-aware nap guidance — the core science:
+  // Napping depletes adenosine (sleep pressure). Sleep pressure = your recovery tool.
+  // Nap before 1 PM = net positive (removes acute impairment, still enough pressure for tonight).
+  // After 3 PM = sleep pressure is worth more than the nap benefit.
+  let napHtml = '';
+  let napNote = '';
+  if (now < 720) { // before noon
+    napHtml = `<b>Nap window open ✓</b> — take a 20–25 min nap before 1 PM, alarm set. ${severe ? 'Given how little you slept, this is strongly recommended.' : ''}`;
+    napNote = 'Caffeine nap trick: drink coffee → nap 20 min → wake up as caffeine kicks in. Peaks alertness with minimal sleep drive loss.';
+  } else if (now < 780) { // noon–1 PM
+    napHtml = `<b>Last call for a nap.</b> 20 min max, alarm set. After 1 PM the hit to tonight's recovery sleep isn't worth it.`;
+    napNote = '';
+  } else if (now < 900) { // 1–3 PM
+    napHtml = `<b>Borderline nap zone.</b> Only nap if safety is a factor (driving, operating equipment) — 20 min, alarm mandatory. Otherwise push through; your sleep pressure is building.`;
+    napNote = '';
+  } else { // after 3 PM
+    napHtml = `<b>Skip the nap.</b> Sleep pressure is your recovery weapon right now — protect it. Go to bed at ${tonightModified} and it will do its job.`;
+    napNote = '';
+  }
+
+  container.innerHTML = `<div class="redeye-card${severe?' redeye-severe':''}">
+    <div class="rc-title">🌅 Redeye recovery protocol${severe?' — severe deficit':''}</div>
+    <div class="rc-meta">${sleepLabel}</div>
+    <div class="rc-nap">${napHtml}${napNote?'<br><span style="color:#888;font-size:11px;margin-top:4px;display:block;">'+napNote+'</span>':''}</div>
+    <div class="rc-rules">
+      <div>☀️ <b>Now:</b> 15 min outdoor sunlight — strongest single circadian reset you can do</div>
+      <div>🛏 <b>Tonight:</b> In-bed by <b>${tonightModified}</b> (1h earlier than normal)</div>
+      <div>⏰ <b>Tomorrow:</b> Wake by <b>${fmt(toMin(state.settings.wake)+30)}</b> max — don't extend the anchor or you compound the deficit</div>
+      <div>🚫 <b>Avoid:</b> Alcohol (fragments recovery sleep even at 1 drink) · napping past 3 PM</div>
+    </div>
+    <button onclick="dismissRedeyeCard()" style="padding:6px 14px;font-size:12px;min-height:32px;">Got it</button>
+  </div>`;
+}
+
+function dismissRedeyeCard() {
+  state.settings.redeyeDismissed = today();
+  saveState(state); renderAll();
+}
+
 // ── Render: emergency banner ──────────────────────────────────────────────────
 function renderEmergencyBanner() {
   ['emergencyBanner','emergencyBannerEv'].forEach(id => {
@@ -1689,6 +1788,7 @@ function renderOuraSyncBar(transient){
 function renderAll() {
   renderEmergencyBanner();
   renderWelcomeBack();
+  renderRedeyeCard();
   renderSleepIn();
   renderHealthPanel();
   renderRamp();
@@ -1810,6 +1910,7 @@ async function syncOuraDaily(manual){
   if(result.totalSleepMin!==null){
     const need=state.settings.sleepNeedMin||DEFAULT_SLEEP_NEED_MIN;
     state.data[iso].gap=Math.max(0,need-result.totalSleepMin);
+    state.data[iso].totalSleepMin=result.totalSleepMin; // stored for redeye detection
   }
   state.data[iso].ouraSyncedAt=new Date().toISOString();
   state.data[iso].ouraSource='api';

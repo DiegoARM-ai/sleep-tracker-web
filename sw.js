@@ -1,6 +1,6 @@
 // Somnus Service Worker
 // ⚠ Bump CACHE_VERSION on every deploy — this is what forces iOS to pick up changes.
-const CACHE_VERSION = 'somnus-v25';
+const CACHE_VERSION = 'somnus-v26';
 const STATIC_ASSETS = ['./manifest.json', './icon-192.png', './icon-512.png'];
 
 // Install: pre-cache static assets only (not index.html)
